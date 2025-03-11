@@ -1,5 +1,5 @@
 services:
-  template:
+  trip_management:
     build: .
     container_name: ${SERVICE_NAME}
     ports:
