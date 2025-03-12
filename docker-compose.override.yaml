@@ -1,4 +1,4 @@
 services:
-  template:
+  trip-management:
     ports:
       - "8080:8080"

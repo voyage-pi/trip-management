@@ -1,5 +1,5 @@
 services:
-  template:
+  trip-management:
     build: .
     container_name: ${SERVICE_NAME}
     environment:
