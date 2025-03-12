@@ -2,7 +2,5 @@ services:
   template:
     build: .
     container_name: ${SERVICE_NAME}
-    ports:
-      - "8080:80"
     environment:
       - ENV_VAR=example
