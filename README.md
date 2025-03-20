@@ -72,24 +72,9 @@ docker-compose up --build
 #### **`POST /api/user/{user}`**
 Creates a new user with the provided user data.
 
-#### **Request Body**
-```json
-{
-  "name": "John Doe",
-  "tag": "@johndoe",
-  "image": "path_to_image.jpg",
-  "stats": {
-    "trips": 2,
-    "friends": 3,
-    "saved": 1,
-    "countries": 2
-  }
-}
-```
-
 #### **Example Request**
 ```sh
-curl -X POST "http://localhost:8080/api/user/@ruimachado"   -H "Content-Type: application/json"   -d '{
+curl -X POST "http://localhost:8081/api/user/@ruimachado"   -H "Content-Type: application/json"   -d '{
   "name": "Rui Machado",
   "tag": "@ruimachado",
   "image": "path_to_image.jpg",
@@ -102,44 +87,15 @@ curl -X POST "http://localhost:8080/api/user/@ruimachado"   -H "Content-Type: ap
   }'
 ```
 
-#### **Example Response**
-```json
-{
-    "name": "Rui Machado",
-    "tag": "@ruimachado",
-    "image": "path_to_image.jpg",
-    "stats": {
-      "trips": 5,
-      "friends": 5,
-      "saved": 4,
-      "countries": 4
-    }
-}
-```
-
 ---
 
 ### **📍 Create Trip**
 #### **`POST /api/trips/{user_id}/{trip}`**
 Creates a new trip for the specified user.
 
-#### **Request Body**
-```json
-{
-  "id": 6,
-  "image": "https://example.com/image.jpg",
-  "days": 7,
-  "people": 4,
-  "destinations": 5,
-  "name": "Trip to Paris",
-  "date": "10 Jul 2025 - 17 Jul 2025",
-  "status": "upcoming"
-}
-```
-
 #### **Example Request**
 ```sh
-curl -X POST "http://localhost:8080/api/trips/ruimachado/paristrip"   -H "Content-Type: application/json"   -d '{
+curl -X POST "http://localhost:8081/api/trips/@ruimachado"   -H "Content-Type: application/json"   -d '{
     "id": 6,
     "image": "https://example.com/image.jpg",
     "days": 7,
@@ -147,23 +103,11 @@ curl -X POST "http://localhost:8080/api/trips/ruimachado/paristrip"   -H "Conten
     "destinations": 5,
     "name": "Trip to Paris",
     "date": "10 Jul 2025 - 17 Jul 2025",
-    "status": "upcoming"
+    "status": "upcoming",
+    "user_tag": "@ruimachado"
   }'
 ```
 
-#### **Example Response**
-```json
-{
-  "id": 6,
-  "image": "https://example.com/image.jpg",
-  "days": 7,
-  "people": 4,
-  "destinations": 5,
-  "name": "Trip to Paris",
-  "date": "10 Jul 2025 - 17 Jul 2025",
-  "status": "upcoming"
-}
-```
 
 ---
 
@@ -173,24 +117,8 @@ Fetches user info for the given user tag.
 
 #### **Example Request**
 ```sh
-curl http://localhost:8080/api/user/ruimachado
+curl http://localhost:8081/api/user/@ruimachado
 ```
-
-#### **Example Response**
-```json
-{
-  "name": "Rui Machado",
-  "tag": "@ruimachado",
-  "image": "../src/assets/rui.jpg",
-  "stats": {
-    "trips": 5,
-    "friends": 5,
-    "saved": 4,
-    "countries": 4
-  }
-}
-```
-
 ---
 
 ### **📍 Fetch User Trips**
@@ -199,25 +127,7 @@ Fetches the trips for the given user tag.
 
 #### **Example Request**
 ```sh
-curl http://localhost:8080/api/trips/ruimachado
-```
-
-#### **Example Response**
-```json
-{
-  "trips": [
-    {
-      "id": 1,
-      "image": "https://example.com/image1.jpg",
-      "days": 4,
-      "people": 2,
-      "destinations": 3,
-      "name": "Trip to Bali",
-      "date": "18 May 2025 - 23 May 2025",
-      "status": "drafted"
-    }
-  ]
-}
+curl http://localhost:8081/api/trips/@ruimachado
 ```
 
 ---

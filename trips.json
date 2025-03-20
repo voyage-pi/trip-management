@@ -65,6 +65,17 @@
       "date": "10 Jul 2025 - 17 Jul 2025",
       "status": "upcoming",
       "user_tag": "@ruimachado"
+    },
+    {
+      "id": 6,
+      "image": "https://example.com/image.jpg",
+      "days": 7,
+      "people": 4,
+      "destinations": 5,
+      "name": "Trip to Paris",
+      "date": "10 Jul 2025 - 17 Jul 2025",
+      "status": "upcoming",
+      "user_tag": "@ruimachado"
     }
   ]
 }
