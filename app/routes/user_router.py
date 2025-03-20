@@ -38,5 +38,3 @@ async def create_user(user_tag: str, user: User):
     with open('users.json', 'w') as f:
         json.dump(users, f, indent=2)
     return new_user
-
-    return new_user

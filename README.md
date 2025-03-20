@@ -133,7 +133,7 @@ curl http://localhost:8081/api/trips/@ruimachado
 ---
 
 ## **🔀 Data Flow**
-1. User creates a trip using the `POST /api/trips/{user_id}/{trip}` endpoint.
+1. User creates a trip using the `POST /api/trips/{user_id}` endpoint.
 2. User creates a user using the `POST /api/user/{user}` endpoint.
 3. User fetches user info and trips via `GET /api/user/{user_tag}` and `GET /api/trips/{user_tag}`.
 
