@@ -132,6 +132,12 @@ curl http://localhost:8081/api/trips/@ruimachado
 
 ---
 
+## ** Testing **
+To run the tests, run the following command:
+```sh
+pytest
+```
+
 ## **🔀 Data Flow**
 1. User creates a trip using the `POST /api/trips/{user_id}` endpoint.
 2. User creates a user using the `POST /api/user/{user}` endpoint.
