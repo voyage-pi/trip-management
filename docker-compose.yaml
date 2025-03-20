@@ -5,4 +5,4 @@ services:
     environment:
       - ENV_VAR=example
     volumes:
-      - ./app:/app
+      - .:/app

@@ -1,5 +1,13 @@
 from fastapi import APIRouter
-from schemas.trips_schema import TripList
+from app.schemas.trips_schema import TripList, Trip
+from fastapi import HTTPException
+import json
+
+with open("app/models/trips.json", "r") as f:
+    trips = json.load(f)
+
+with open("app/models/users.json", "r") as f:
+    users = json.load(f)
 
 router = APIRouter(
     prefix="/api",
@@ -8,61 +16,30 @@ router = APIRouter(
 )
 
 # Mock trips data
-mock_trips = {
-    "trips": [
-        {
-            "id": 1,
-            "image": "https://i.pinimg.com/736x/1e/69/d6/1e69d69083d98c4ac2b37fcd3a21c978.jpg",
-            "days": 4,
-            "people": 2,
-            "destinations": 3,
-            "name": "Trip to Bali",
-            "date": "18 May 2025 - 23 May 2025",
-            "status": "drafted"
-        },
-        {
-            "id": 2,
-            "image": "https://i.pinimg.com/736x/6b/f7/56/6bf756672824e2f961d661809649f0b7.jpg",
-            "days": 8,
-            "people": 4,
-            "destinations": 5,
-            "name": "Trip to Cyprus",
-            "date": "10 Aug 2025 - 14 Aug 2025", 
-            "status": "incoming"
-        },
-        {
-            "id": 3,
-            "image": "https://i.pinimg.com/736x/97/70/be/9770bee8dae261fbf16eaf952aa1e409.jpg",
-            "days": 10,
-            "people": 6,
-            "destinations": 7,
-            "name": "Trip to Barcelona",
-            "date": "18 Oct 2025 - 28 Oct 2025",
-            "status": "incoming"
-        },
-        {
-            "id": 4,
-            "image": "https://i.pinimg.com/736x/60/9a/bd/609abdf28dc534359867cc8b790b708d.jpg",
-            "days": 5,
-            "people": 2,
-            "destinations": 4,
-            "name": "Trip to Azores",
-            "date": "5 Jun 2025 - 10 Jun 2025",
-            "status": "completed"
-        },
-        {
-            "id": 5,
-            "image": "https://i.pinimg.com/736x/16/ab/4c/16ab4c80a0d1da9650a43892c7103627.jpg",
-            "days": 3,
-            "people": 3,
-            "destinations": 2,
-            "name": "Trip to Oporto",
-            "date": "13 Jul 2025 - 16 Jul 2025",
-            "status": "completed"
-        }
-    ]
-}
 
-@router.get("/trips", response_model=TripList)
-async def get_trips():
-    return mock_trips
+@router.get("/trips/{user_tag}", response_model=TripList)
+async def get_trips(user_tag: str):
+    return TripList(trips=[trip for trip in trips["trips"] if trip["user_tag"] == user_tag])
+
+
+@router.get("/trips/{user_tag}/{trip_id}", response_model=Trip)
+async def get_trip(user_tag: str, trip_id: int):
+    return Trip(trips=[trip for trip in trips["trips"] if trip["user_tag"] == user_tag and trip["id"] == trip_id])
+
+
+@router.post("/trips/{user_tag}", response_model=Trip)
+async def create_trip(user_tag: str, trip: Trip):
+    # Ensure the user exists
+    user = next((user for user in users["users"] if user["tag"] == user_tag), None)
+    if user is None:
+        raise HTTPException(status_code=400, detail=f"User tag '{user_tag}' not found")
+    
+    trip_data = trip.model_dump()
+    trip_data["user_tag"] = user_tag
+    trips["trips"].append(trip_data)
+    
+    # Save back to the JSON file
+    with open('trips.json', 'w') as f:
+        json.dump(trips, f, indent=2)
+    
+    return trip_data

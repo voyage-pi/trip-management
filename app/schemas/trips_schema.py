@@ -10,6 +10,7 @@ class Trip(BaseModel):
     name: str
     date: str
     status: str
+    user_tag: str
 
 class TripList(BaseModel):
     trips: List[Trip]
