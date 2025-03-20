@@ -3,10 +3,13 @@ from app.schemas.trips_schema import TripList, Trip
 from fastapi import HTTPException
 import json
 
-with open("app/models/trips.json", "r") as f:
+TRIPS_FILE_PATH = "app/models/trips.json"
+USERS_FILE_PATH = "app/models/users.json"
+
+with open(TRIPS_FILE_PATH, "r") as f:
     trips = json.load(f)
 
-with open("app/models/users.json", "r") as f:
+with open(USERS_FILE_PATH, "r") as f:
     users = json.load(f)
 
 router = APIRouter(
@@ -39,7 +42,7 @@ async def create_trip(user_tag: str, trip: Trip):
     trips["trips"].append(trip_data)
     
     # Save back to the JSON file
-    with open('trips.json', 'w') as f:
+    with open(TRIPS_FILE_PATH, 'w') as f:
         json.dump(trips, f, indent=2)
     
     return trip_data

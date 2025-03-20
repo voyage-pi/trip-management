@@ -2,7 +2,9 @@ from fastapi import APIRouter, HTTPException
 from app.schemas.user_schema import User
 import json
 
-with open("app/models/users.json", "r") as f:
+USERS_FILE_PATH = "app/models/users.json"
+
+with open(USERS_FILE_PATH, "r") as f:
     users = json.load(f)
 
 router = APIRouter(
@@ -35,6 +37,6 @@ async def create_user(user_tag: str, user: User):
     new_user["tag"] = user_tag
     users["users"].append(new_user)
 
-    with open('users.json', 'w') as f:
+    with open(USERS_FILE_PATH, 'w') as f:
         json.dump(users, f, indent=2)
     return new_user

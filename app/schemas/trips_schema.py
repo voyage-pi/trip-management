@@ -1,4 +1,4 @@
-from pydantic import BaseModel
+from pydantic import BaseModel, ConfigDict
 from typing import List
 
 class Trip(BaseModel):
@@ -11,6 +11,9 @@ class Trip(BaseModel):
     date: str
     status: str
     user_tag: str
+
+    model_config = ConfigDict(from_attributes=True)
+
 
 class TripList(BaseModel):
     trips: List[Trip]
