@@ -1,5 +1,6 @@
-from app.schemas.trips_schema import TripList,Trip
+from app.schemas.trips_schema import Trip
 from pymongo import MongoClient 
+from typing import List
 from dotenv import load_dotenv
 import os 
 
@@ -19,8 +20,15 @@ class DBClient():
         self.db=self.client[str(mongoDatabase)]
         self.collection=self.db["trips"]
 
-    def insert_trip(self,trip:TripList):
-        data=trip["trips"]
-        result=self.collection.insert_many(data)
-        return result 
+    # Returns the list of id's of the inserted documents 
+    def post_trip(self,trip:List[Trip])->List[str]:
+        r=self.collection.insert_many(trip)
+        ids= [str(_id) for _id in r.inserted_ids]
+        return ids
+
+
+    def get_trip_by_user_id(self,id:str):
+        result=list(self.collection.find({"people":id}))
+        parsed_documents = [{**doc, '_id': str(doc['_id'])} for doc in result]
+        return parsed_documents
 
