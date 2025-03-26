@@ -2,7 +2,17 @@ services:
   trip-management:
     build: .
     container_name: ${SERVICE_NAME}
+    depends_on: 
+      - mongo-trip
     environment:
       - ENV_VAR=example
     volumes:
       - .:/app
+  mongo-trip:
+      image: mongo
+      restart: always
+      ports:
+        - 27017:27017
+      environment:
+        MONGO_INITDB_ROOT_USERNAME: ${MONGO_USER}
+        MONGO_INITDB_ROOT_PASSWORD: ${MONGO_PASSWORD}
