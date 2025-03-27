@@ -1,7 +1,7 @@
 from app.database import MongoClient
 from app.schemas.response import ResponseBody
 from fastapi import APIRouter
-from app.schemas.trips_schema import Trip,State 
+from app.schemas.trips_schema import Trip
 from app.schemas.forms_schema import Form
 from app.database.MongoClient import DBClient
 from fastapi import HTTPException
@@ -97,13 +97,24 @@ async def trip_creation(forms:Form):
 
 #Gets all of an user by id
 @router.get("/trips/{id}", response_model=ResponseBody)
-async def get_trips(id: str):
+async def get_trip(id: str):
     client= DBClient()
     result=client.get_trip_by_user_id(id)
     if len(result)==0:
         return ResponseBody({},"Either the user doens't exist or didn't create a trip yet",204)
     return ResponseBody({"trips":result}) 
 
+@router.put("/trip/{id}",response_model=ResponseBody)
+async def update_trip(id:str,trip:Trip):
+    client=DBClient()
+    try:
+        if client.put_trip_by_doc_id(id,trip):
+            return ResponseBody({"updated":True},"Trip Updated with sucess!",201)
+        return ResponseBody({},"No trip updated!",204)
+    except Exception as e: 
+        return ResponseBody({"error":e},"Unexpected error!",400)
 
 
-
+# Delete Places from a certain day on a certain trip
+# Get new trip for a slot from a certain trip
+# Update route between places for a certain day 

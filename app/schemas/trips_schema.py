@@ -2,10 +2,6 @@ from datetime import datetime, timedelta
 from typing import TypedDict,List,Tuple
 from enum import Enum
 # Modified classes for MongoDB compatibility
-class State(Enum):
-    DRAFTED ="drafted"
-    INCOMING="incoming"
-    COMPLETED="completed"
 
 class Place(TypedDict):
     placeId: str
