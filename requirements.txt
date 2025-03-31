@@ -3,4 +3,5 @@ uvicorn
 typer
 python-dotenv
 pytest
+requests 
 pymongo
