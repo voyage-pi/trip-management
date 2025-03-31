@@ -24,14 +24,14 @@ async def trip_creation(forms:Form):
         questions.extend([q for q in questions ])
     delta = timedelta(days=forms.duration) 
     requestBody={
-        "questionnaire":[q.dict() for q in questions],  # ou q.model_dump(),
+        "questionnaire":[q.model_dump() for q in questions],
         "start_date":forms.dateStart,
         "end_date":forms.dateStart + delta,
         "budget":forms.budget
     } 
     if TripType(trip_type)==TripType.PLACE:
         coordinates=place.coordinates 
-        requestBody["coordinates"]=coordinates.dict()
+        requestBody["coordinates"]=coordinates.model_dump()
         print(coordinates.dict())
     elif TripType(trip_type)==TripType.ROAD:
         origin=place.origin
@@ -41,11 +41,16 @@ async def trip_creation(forms:Form):
     #generate the itinerary
     requestBody['start_date'] = requestBody['start_date'].isoformat()
     requestBody['end_date'] = requestBody['end_date'].isoformat()
-    response=request.post("http://recommendations:8080/trip",json=requestBody)
-    if response.status_code != 200:
-        return ResponseBody({},"There was unexpected error",500)
-    itinerary=response.json()
-    return ResponseBody({"itinerary":itinerary},"Trips created")
+    try:
+        response=request.post("http://recommendations:8080/trip",json=requestBody)
+        if response.status_code != 200:
+            print(f"Error from recommendations service: {response.text}")
+            return ResponseBody({"error": response.text},"Error from recommendations service", 500)
+        itinerary=response.json()
+        return ResponseBody({"itinerary":itinerary},"Trips created")
+    except Exception as e:
+        print(f"Error making request to recommendations service: {str(e)}")
+        return ResponseBody({"error": str(e)},"Error connecting to recommendations service", 500)
 
 #Gets all of an user by id
 @router.get("/trips/{id}", response_model=ResponseBody)
