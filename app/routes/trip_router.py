@@ -21,15 +21,18 @@ async def trip_creation(forms:Form):
         trip_type=forms.tripType   
         place= forms.place
         
-        # Transformar o questionário em um formato de dicionário com chaves numéricas
-        question_dict = {}
+        questionnaire = []
         for user_id, user_questions in forms.questions.items():
             for q in user_questions:
-                question_dict[str(q.question_id)] = q.value
+                questionnaire.append({
+                    "question_id": q.question_id,
+                    "value": q  .value,
+                    "type": "scale"
+                })
                 
         delta = timedelta(days=forms.duration) 
         requestBody={
-            "questionnaire": question_dict,  # Usando dicionário em vez de lista
+            "questionnaire": questionnaire,  
             "start_date": forms.dateStart,
             "end_date": forms.dateStart + delta,
             "budget": forms.budget
@@ -55,7 +58,6 @@ async def trip_creation(forms:Form):
         if response.status_code != 200:
             print(f"Error from recommendations service: {response.text}")
             return ResponseBody({"error": response.text},"Error from recommendations service", 500)
-            
         itinerary=response.json()
         return ResponseBody({"itinerary":itinerary},"Trips created")
     except Exception as e:
