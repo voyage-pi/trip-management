@@ -17,31 +17,43 @@ router = APIRouter(
 # Mock trips data
 @router.post("/trips",response_model=ResponseBody)
 async def trip_creation(forms:Form):
-    trip_type=forms.tripType   
-    place= forms.place
-    questions = []
-    for k,questions in forms.questions.items():
-        questions.extend([q for q in questions ])
-    delta = timedelta(days=forms.duration) 
-    requestBody={
-        "questionnaire":[q.model_dump() for q in questions],
-        "start_date":forms.dateStart,
-        "end_date":forms.dateStart + delta,
-        "budget":forms.budget
-    } 
-    if TripType(trip_type)==TripType.PLACE:
-        coordinates=place.coordinates 
-        requestBody["coordinates"]=coordinates.model_dump()
-        print(coordinates.dict())
-    elif TripType(trip_type)==TripType.ROAD:
-        origin=place.origin
-        destination=place.destination
-    elif TripType(trip_type)==TripType.ZONE:
-        coordinates=place.coordinates 
-    #generate the itinerary
-    requestBody['start_date'] = requestBody['start_date'].isoformat()
-    requestBody['end_date'] = requestBody['end_date'].isoformat()
     try:
+        trip_type=forms.tripType   
+        place= forms.place
+        
+        questionnaire = []
+        for user_id, user_questions in forms.questions.items():
+            for q in user_questions:
+                questionnaire.append({
+                    "question_id": q.question_id,
+                    "value": q  .value,
+                    "type": "scale"
+                })
+                
+        delta = timedelta(days=forms.duration) 
+        requestBody={
+            "questionnaire": questionnaire,  
+            "start_date": forms.dateStart,
+            "end_date": forms.dateStart + delta,
+            "budget": forms.budget
+        } 
+        
+        if TripType(trip_type)==TripType.PLACE:
+            coordinates=place.coordinates 
+            requestBody["coordinates"]=coordinates.model_dump()
+        elif TripType(trip_type)==TripType.ROAD:
+            origin=place.origin
+            destination=place.destination
+        elif TripType(trip_type)==TripType.ZONE:
+            coordinates=place.coordinates
+            
+        # Converter datas para string ISO
+        requestBody['start_date'] = requestBody['start_date'].isoformat()
+        requestBody['end_date'] = requestBody['end_date'].isoformat()
+        
+        # Depuração
+        print("Sending to recommendations service:", json.dumps(requestBody))
+        
         response=request.post("http://recommendations:8080/trip",json=requestBody)
         if response.status_code != 200:
             print(f"Error from recommendations service: {response.text}")
