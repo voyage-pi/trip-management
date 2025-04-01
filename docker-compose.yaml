@@ -1,8 +1,8 @@
 services:
   trip-management:
     build: .
-    container_name: ${SERVICE_NAME}
-    depends_on: 
+    container_name: trip-management
+    depends_on:
       - mongo-trip
     environment:
       - ENV_VAR=example
