@@ -5,31 +5,39 @@ from enum import Enum
 
 
 class QuestionType(Enum):
-    SCALE="scale"
-    SELECT="select"
+    SCALE = "scale"
+    SELECT = "select"
+
 
 class Question(BaseModel):
-    question_id:int
-    value:Any
-    type:QuestionType
+    question_id: int
+    value: Any
+    type: QuestionType
+
     class Config:
         use_enum_values = True
 
+
 class TripType(Enum):
-    PLACE= "place"
+    PLACE = "place"
     ROAD = "road"
     ZONE = "zone"
 
+
 class LatLong(BaseModel):
-    latitude:float
-    longitude:float
+    latitude: float
+    longitude: float
+
 
 class Road(BaseModel):
-    origin:LatLong
-    destination:LatLong
+    origin: LatLong
+    destination: LatLong
+
 
 class Place(BaseModel):
-    coordinates:LatLong
+    coordinates: LatLong
+    place_name: str
+
 
 class Zone(BaseModel):
     center:LatLong
@@ -40,7 +48,7 @@ class Form(BaseModel):
     dateStart:datetime
     duration:int # duration in days
     tripType:TripType
-    data_type: Place | Zone | Road
+    data_type: Optional[Place] | Optional[Zone] | Optional[Road]
     users:List[str]
     questions:Dict[str,List[Question]]
 
