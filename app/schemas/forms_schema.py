@@ -40,7 +40,7 @@ class Form(BaseModel):
     dateStart:datetime
     duration:int # duration in days
     tripType:TripType
-    data_type: Optional[Place]| Optional[Zone]| Optional[Road]
+    data_type: Place | Zone | Road
     users:List[str]
     questions:Dict[str,List[Question]]
 

@@ -18,13 +18,13 @@ router = APIRouter(
 @router.post("/trips",response_model=ResponseBody)
 async def trip_creation(forms:Form):
     try:
-        trip_type=forms.tripType   
+        trip_type=forms.tripType.value
         questionnaire = []
         for user_id, user_questions in forms.questions.items():
             for q in user_questions:
                 questionnaire.append({
                     "question_id": q.question_id,
-                    "value": q  .value,
+                    "value": q.value,
                     "type": "scale"
                 })
                 
@@ -36,18 +36,10 @@ async def trip_creation(forms:Form):
             "budget": forms.budget
         } 
         
-        data_type=forms.data_type
-        if TripType(trip_type)==TripType.PLACE:
-            coordinates=data_type.coordinates 
-            requestBody["coordinates"]=coordinates.model_dump()
-        elif TripType(trip_type)==TripType.ROAD:
-            origin=data_type.origin
-            destination=data_type.destination
-        if TripType(trip_type)==TripType.ZONE:
-            radius=data_type.radius
-            center=data_type.center.model_dump()
-            requestBody["radius"]=radius
-            requestBody["center"]=center
+        data_type=forms.data_type.model_dump()
+        requestBody["data"]=data_type
+        requestBody["tripType"]=trip_type
+
         # Converter datas para string ISO
         requestBody['start_date'] = requestBody['start_date'].isoformat()
         requestBody['end_date'] = requestBody['end_date'].isoformat()
