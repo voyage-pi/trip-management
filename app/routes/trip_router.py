@@ -20,7 +20,6 @@ router = APIRouter(
 async def trip_creation(forms: Form):
     try:
         trip_type = forms.tripType
-        place = forms.place
 
         questionnaire = []
         for user_id, user_questions in forms.questions.items():
@@ -38,14 +37,19 @@ async def trip_creation(forms: Form):
             "budget": forms.budget,
         }
 
+        data_type = forms.data_type
+
         if TripType(trip_type) == TripType.PLACE:
-            coordinates = place.coordinates
+            coordinates = data_type.coordinates
             requestBody["coordinates"] = coordinates.model_dump()
         elif TripType(trip_type) == TripType.ROAD:
-            origin = place.origin
-            destination = place.destination
+            origin = data_type.origin
+            destination = data_type.destination
         elif TripType(trip_type) == TripType.ZONE:
-            coordinates = place.coordinates
+            radius = data_type.radius
+            center = data_type.center.model_dump()
+            requestBody["radius"] = radius
+            requestBody["center"] = center
 
         # Converter datas para string ISO
         requestBody["start_date"] = requestBody["start_date"].isoformat()
