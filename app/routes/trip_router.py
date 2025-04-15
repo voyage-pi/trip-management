@@ -75,16 +75,28 @@ async def trip_creation(forms: Form):
         )
 
 
-# Gets all of an user by id
-@router.get("/trips/{id}", response_model=ResponseBody)
-async def get_trip(id: str):
+# Gets all trips of a user by user id
+@router.get("/users/{user_id}/trips", response_model=ResponseBody)
+async def get_user_trips(user_id: str):
     client = DBClient()
-    result = client.get_trip_by_user_id(id)
+    result = client.get_trip_by_user_id(user_id)
     if len(result) == 0:
         return ResponseBody(
-            {}, "Either the user doens't exist or didn't create a trip yet", 204
+            {}, "Either the user doesn't exist or didn't create a trip yet", 204
         )
-    return ResponseBody({"trips": result})
+    return ResponseBody({"trips": result}, "Trips retrieved with success!", 200)
+
+
+# Get a single trip by its ID
+@router.get("/trips/{trip_id}", response_model=ResponseBody)
+async def get_trip_by_id(trip_id: str):
+    client = DBClient()
+    result = client.get_trip_by_id(trip_id)
+    if not result:
+        return ResponseBody(
+            {}, "Trip not found", 404
+        )
+    return ResponseBody({"itinerary": result}, "Trip retrieved with success!", 200)
 
 
 @router.put("/trip/{id}", response_model=ResponseBody)
@@ -97,6 +109,11 @@ async def update_trip(id: str, trip: Trip):
     except Exception as e:
         return ResponseBody({"error": e}, "Unexpected error!", 400)
 
+@router.get("/trips/all", response_model=ResponseBody)
+async def get_all_trips():
+    client = DBClient()
+    result = client.get_all_trips()
+    return ResponseBody({"trips": result}, "Trips retrieved with success!", 200)
 
 # Delete Places from a certain day on a certain trip
 # Get new trip for a slot from a certain trip

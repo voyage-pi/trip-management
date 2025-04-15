@@ -43,3 +43,9 @@ class DBClient:
             {"$pull": {"days.$[].places": {"placeId": place_id}}},
         )
         return result.modified_count > 0
+
+    def get_all_trips(self):
+        result = list(self.collection.find({}))
+        parsed_documents = [{**doc, "_id": str(doc["_id"])} for doc in result]
+        return parsed_documents
+0
