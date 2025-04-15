@@ -20,7 +20,7 @@ router = APIRouter(
 async def trip_creation(forms: Form):
     try:
         trip_type = forms.tripType
-
+        display_name = forms.display_name
         questionnaire = []
         for user_id, user_questions in forms.questions.items():
             for q in user_questions:
@@ -31,26 +31,14 @@ async def trip_creation(forms: Form):
         delta = timedelta(days=forms.duration)
         requestBody = {
             "questionnaire": questionnaire,
-            "place_name": forms.place.place_name,
             "start_date": forms.dateStart,
             "end_date": forms.dateStart + delta,
             "budget": forms.budget,
         }
 
-        data_type = forms.data_type
-
-        if TripType(trip_type) == TripType.PLACE:
-            coordinates = data_type.coordinates
-            requestBody["coordinates"] = coordinates.model_dump()
-        elif TripType(trip_type) == TripType.ROAD:
-            origin = data_type.origin
-            destination = data_type.destination
-        elif TripType(trip_type) == TripType.ZONE:
-            radius = data_type.radius
-            center = data_type.center.model_dump()
-            requestBody["radius"] = radius
-            requestBody["center"] = center
-
+        data_type = forms.data_type.model_dump()
+        requestBody["data"]=data_type
+        requestBody["tripType"]=trip_type.value
         # Converter datas para string ISO
         requestBody["start_date"] = requestBody["start_date"].isoformat()
         requestBody["end_date"] = requestBody["end_date"].isoformat()
@@ -67,7 +55,7 @@ async def trip_creation(forms: Form):
                 {"error": response.text}, "Error from recommendations service", 500
             )
         itinerary = response.json()
-        return ResponseBody({"itinerary": itinerary}, "Trips created")
+        return ResponseBody({"itinerary": itinerary,"name":display_name}, "Trips created")
     except Exception as e:
         print(f"Error making request to recommendations service: {str(e)}")
         return ResponseBody(
