@@ -3,9 +3,18 @@ services:
     build: .
     container_name: trip-management
     depends_on:
+      - trip-cache
       - mongo-trip
     environment:
       - ENV_VAR=example
+  trip-cache:
+    image: redis:alpine
+    container_name: trip-cache
+    ports:
+      - 6380:6379
+    restart: always
+    volumes:
+      - redis_data:/data
   mongo-trip:
       image: mongo
       restart: always
