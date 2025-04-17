@@ -53,12 +53,10 @@ class DBClient:
     def get_trip_by_id(self, id: str)->Union[Trip,str]:
         try:
             result = self.collection.find_one({"_id": ObjectId(id)})
-            print("resultado:",result)
             result["_id"]=str(result["_id"])
             result["id"]=result["_id"]
             result.pop("_id")
             castedResult=Trip(**result)
-            print("cast:",castedResult)
             return castedResult 
         except Exception as e:
             return f"Error fetching trip by id: {e}"

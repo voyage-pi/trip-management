@@ -60,8 +60,7 @@ async def trip_creation(forms: Form):
             return ResponseBody(
                 {"error": response.text}, "Error from recommendations service", status.HTTP_500_INTERNAL_SERVER_ERROR
             )
-        r=response.json()["itinerary"]
-        itinerary = r
+        itinerary=response.json()["itinerary"]
         await redis_client.set(str(documentID),json.dumps(itinerary),expire=3600)
         return ResponseBody({"tripId":str(documentID),"itinerary": itinerary,"name":display_name}, "Trips created")
     except Exception as e:
@@ -90,11 +89,11 @@ async def get_trip(id: str):
     try:
         itinerary=await redis_client.get(str(id))
         if itinerary is not None:
-            return ResponseBody({"trips": json.loads(itinerary)})
+            return ResponseBody({"itinerary": json.loads(itinerary)})
         result = client.get_trip_by_id(id)
         if not isinstance(result,str) and result is not None:
-            return ResponseBody({"trips":  result.model_dump() if isinstance(result,Trip) else result})
-        return ResponseBody({}, "No trip found for this id.",status.HTTP_204_NO_CONTENT)
+            return ResponseBody({"itinerary":  result.model_dump() if isinstance(result,Trip) else result})
+        return ResponseBody({}, "No trip found for this id.",status.HTTP_404_NOT_FOUND)
     except Exception as e :
         print(f"Error inserting trip into the database: {str(e)}")
         return ResponseBody(
