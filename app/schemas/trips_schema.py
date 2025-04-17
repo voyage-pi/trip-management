@@ -50,7 +50,7 @@ class Trip(BaseModel):
     start_date: datetime | str
     end_date: datetime | str
     days: List[Day] = []
-
+    name:str
 
 class TripSaveRequest(BaseModel):
     id: str 

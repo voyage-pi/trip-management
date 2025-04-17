@@ -61,8 +61,13 @@ async def trip_creation(forms: Form):
                 {"error": response.text}, "Error from recommendations service", status.HTTP_500_INTERNAL_SERVER_ERROR
             )
         itinerary=response.json()["itinerary"]
-        await redis_client.set(str(documentID),json.dumps(itinerary),expire=3600)
-        return ResponseBody({"tripId":str(documentID),"itinerary": itinerary,"name":display_name}, "Trips created")
+        #adding the display name as attribute to the trip
+        itinerary["name"]=display_name
+        # casting the dictionary to Trip BaseModel object
+        itinerary=Trip(**itinerary)
+        # casting the dictionary to Trip BaseModel object
+        await redis_client.set(str(documentID),json.dumps(itinerary.model_dump()),expire=3600)
+        return ResponseBody({"tripId":str(documentID),"itinerary": itinerary.model_dump()}, "Trips created")
     except Exception as e:
         print(f"Error making request to recommendations service: {str(e)}")
         return ResponseBody(
