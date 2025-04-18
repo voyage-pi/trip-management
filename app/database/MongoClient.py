@@ -48,4 +48,9 @@ class DBClient:
         result = list(self.collection.find({}))
         parsed_documents = [{**doc, "_id": str(doc["_id"])} for doc in result]
         return parsed_documents
-0
+    
+    def get_trip_by_id(self, id: str):  
+        result = self.collection.find_one({"_id": ObjectId(id)})
+        if result:
+            result["_id"] = str(result["_id"])
+        return result
