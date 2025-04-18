@@ -1,11 +1,14 @@
-from app.database import MongoClient
+from app.database.CacheClient import RedisClient 
 from app.schemas.response import ResponseBody
-from fastapi import APIRouter
-from app.schemas.trips_schema import Trip
-from app.schemas.forms_schema import Form, TripType
+from fastapi import APIRouter,status
+from app.schemas.trips_schema import Trip,TripSaveRequest
+from app.schemas.forms_schema import Form
 from app.database.MongoClient import DBClient
 import requests as request
 import json
+from pydantic import ValidationError
+from bson import ObjectId
+from typing import List
 from datetime import datetime, timedelta
 
 router = APIRouter(
@@ -15,10 +18,14 @@ router = APIRouter(
 )
 
 
+# create global redis instance 
+redis_client = RedisClient()
 # Mock trips data
-@router.post("/trips", response_model=ResponseBody)
+@router.post("/trips")
 async def trip_creation(forms: Form):
     try:
+        # generate document Id for itinerary document and cache
+        documentID=ObjectId()
         trip_type = forms.tripType
         display_name = forms.display_name
         questionnaire = []
@@ -45,47 +52,64 @@ async def trip_creation(forms: Form):
 
         # Depuração
         print("Sending to recommendations service:", json.dumps(requestBody))
-
         response = request.post(
             "http://recommendations:8080/trip", json=requestBody, timeout=40
         )
         if response.status_code != 200:
             print(f"Error from recommendations service: {response.text}")
             return ResponseBody(
-                {"error": response.text}, "Error from recommendations service", 500
+                {"error": response.text}, "Error from recommendations service", status.HTTP_500_INTERNAL_SERVER_ERROR
             )
-        itinerary = response.json()
-        return ResponseBody({"itinerary": itinerary,"name":display_name}, "Trips created")
+        itinerary=response.json()["itinerary"]
+        #adding the display name as attribute to the trip
+        itinerary["name"]=display_name
+        # casting the dictionary to Trip BaseModel object
+        itinerary=Trip(**itinerary)
+        # casting the dictionary to Trip BaseModel object
+        await redis_client.set(str(documentID),json.dumps(itinerary.model_dump()),expire=3600)
+        return ResponseBody({"tripId":str(documentID),"itinerary": itinerary.model_dump()}, "Trips created")
     except Exception as e:
         print(f"Error making request to recommendations service: {str(e)}")
         return ResponseBody(
-            {"error": str(e)}, "Error connecting to recommendations service", 500
+            {"error": str(e)}, "Error connecting to recommendations service", status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
+
+@router.post("/save")
+async def save_trip(trip:TripSaveRequest):
+    client = DBClient()
+    try:
+        result=client.post_trip([trip.itinerary],[trip.id])
+        if len(result)!=0:
+            return ResponseBody({"trip_id":trip.id}, "Trips saved")
+        raise Exception
+    except Exception as e:
+        print(f"Error inserting trip into the database: {str(e)}")
+        return ResponseBody(
+            {"error": str(e)}, "", status.HTTP_500_INTERNAL_SERVER_ERROR 
         )
 
-
-# Gets all of an user by id
-@router.get("/trips/{id}", response_model=ResponseBody)
+@router.get("/trips/{id}")
 async def get_trip(id: str):
     client = DBClient()
-    result = client.get_trip_by_user_id(id)
-    if len(result) == 0:
+    try:
+        itinerary=await redis_client.get(str(id))
+        if itinerary is not None:
+            return ResponseBody({"itinerary": json.loads(itinerary)})
+        result = client.get_trip_by_id(id)
+        if not isinstance(result,str) and result is not None:
+            return ResponseBody({"itinerary":  result.model_dump() if isinstance(result,Trip) else result})
+        return ResponseBody({}, "No trip found for this id.",status.HTTP_404_NOT_FOUND)
+    except Exception as e :
+        print(f"Error inserting trip into the database: {str(e)}")
         return ResponseBody(
-            {}, "Either the user doens't exist or didn't create a trip yet", 204
-        )
-    return ResponseBody({"trips": result})
+            {"error": str(e)}, "Error while fetching for the trip by id.", status.HTTP_500_INTERNAL_SERVER_ERROR)
 
-
-@router.put("/trip/{id}", response_model=ResponseBody)
+@router.put("/trip/{id}")
 async def update_trip(id: str, trip: Trip):
     client = DBClient()
     try:
         if client.put_trip_by_doc_id(id, trip):
-            return ResponseBody({"updated": True}, "Trip Updated with sucess!", 201)
-        return ResponseBody({}, "No trip updated!", 204)
+            return ResponseBody({"updated": True}, "Trip Updated with sucess!", status.HTTP_201_CREATED)
+        return ResponseBody({}, "No trip updated!", status.HTTP_204_NO_CONTENT)
     except Exception as e:
-        return ResponseBody({"error": e}, "Unexpected error!", 400)
-
-
-# Delete Places from a certain day on a certain trip
-# Get new trip for a slot from a certain trip
-# Update route between places for a certain day
+        return ResponseBody({"error": e}, "Unexpected error!", status.HTTP_400_BAD_REQUEST )
