@@ -1,12 +1,15 @@
 from datetime import datetime, timedelta
-from typing import List,Optional,Dict
-from pydantic import BaseModel,field_validator
+from typing import List, Optional, Dict
+from pydantic import BaseModel, field_validator
 from enum import Enum
+
 # Modified classes for MongoDB compatibility
+
 
 class LatLong(BaseModel):
     latitude: float
     longitude: float
+
 
 class PlaceInfo(BaseModel):
     id: Optional[str] = None
@@ -27,11 +30,13 @@ class PlaceInfo(BaseModel):
 
 
 class Activity(BaseModel):
+    id: int
     place: PlaceInfo
     start_time: datetime | str
     end_time: datetime | str
     activity_type: str
     duration: int  # in minutes
+
 
 class Route(BaseModel):
     polylineEncoded: str
@@ -50,8 +55,9 @@ class Trip(BaseModel):
     start_date: datetime | str
     end_date: datetime | str
     days: List[Day] = []
-    name:str
+    name: str
+
 
 class TripSaveRequest(BaseModel):
-    id: str 
+    id: str
     itinerary: Trip

@@ -10,8 +10,6 @@ services:
   trip-cache:
     image: redis:alpine
     container_name: trip-cache
-    ports:
-      - 6380:6379
     restart: always
     volumes:
       - redis_data:/data
