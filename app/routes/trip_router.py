@@ -115,7 +115,7 @@ async def update_trip(id: str, trip: Trip):
         return ResponseBody({"error": e}, "Unexpected error!", status.HTTP_400_BAD_REQUEST )
 
 
-@router.get("/users/{user_id}/trips", response_model=ResponseBody)
+@router.get("/users/{user_id}/trips")
 async def get_trips_by_user_id(user_id: str):
     client = DBClient()
     try:
