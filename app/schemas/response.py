@@ -1,15 +1,17 @@
 from typing import Dict, Any
-from pydantic import BaseModel
+from fastapi.responses import JSONResponse
+from fastapi import status 
 
-class ResponseBody(BaseModel):
-    status_code: int
-    message: str
-    response: Dict[str, Any]
+class ResponseBody(JSONResponse):
+    def __init__(self, response: Dict[str, Any], message: str = "", status_code: int = status.HTTP_200_OK):
+        content = {
+            "status_code": status_code,
+            "message": message,
+            "response": response
+        }
+        super().__init__(content=content, status_code=status_code)
 
-    def __init__(self, response: Dict[str, Any], message: str = "", status_code: int = 200):
-        super().__init__(response=response, message=message, status_code=status_code)
-
-    def set_status_code(self, code: int):
+    def set_status_code(self, code: status):
         self.status_code = code
 
     def set_message(self, message: str):

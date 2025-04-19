@@ -1,8 +1,10 @@
 from app.schemas.trips_schema import Trip
 from pymongo import MongoClient
 from bson import ObjectId
-from typing import List
+from typing import List,Union
+from pymongo.errors import PyMongoError
 from dotenv import load_dotenv
+from bson import ObjectId
 import os
 
 load_dotenv()
@@ -15,29 +17,69 @@ mongoPwd = os.getenv("MONGOPASSWORD")
 mongoDatabase = os.getenv("MONGO_DATABASE", "voyage-db")
 
 
+
 class DBClient:
     def __init__(self):
-        url = f"mongodb://{mongoUser}:{mongoPwd}@{mongoHost}:{mongoPort}/"
-        self.client = MongoClient(url)
-        self.db = self.client[str(mongoDatabase)]
-        self.collection = self.db["trips"]
+        try:
+            url = f"mongodb://{mongoUser}:{mongoPwd}@{mongoHost}:{mongoPort}/"
+            self.client = MongoClient(url)
+            self.db = self.client[str(mongoDatabase)]
+            self.collection = self.db["trips"]
+        except PyMongoError as e:
+            raise ConnectionError(f"Failed to connect to MongoDB: {e}")
 
-    # Returns the list of id's of the inserted documents
-    def post_trip(self, trip: List[Trip]) -> List[str]:
-        r = self.collection.insert_many(trip)
-        ids = [str(_id) for _id in r.inserted_ids]
-        return ids
+    def post_trip(self, trips: List[Trip], ids: List[str] = []) -> Union[List[str], str]:
+        assert (len(trips) == len(ids) or not ids), "Length of trips and ids must match or ids must be empty"
+        assert (len(trips) != 0), "Trips list must not be empty"
+        documents = []
 
-    def get_trip_by_user_id(self, id: str):
-        result = list(self.collection.find({"people": id}))
-        parsed_documents = [{**doc, "_id": str(doc["_id"])} for doc in result]
-        return parsed_documents
+        for i, t in enumerate(trips):
+            try:
+                if ids:
+                    doc = {"_id": ObjectId(ids[i]), **t.model_dump()}
+                else:
+                    doc = t.model_dump()
+                documents.append(doc)
+            except Exception as e:
+                return f"Error preparing document for insertion: {e}"
+
+        try:
+            r = self.collection.insert_many(documents)
+            inserted_ids = [str(_id) for _id in r.inserted_ids]
+            return inserted_ids
+        except PyMongoError as e:
+            return f"Error inserting into the database: {e}"
+
+    def get_trip_by_id(self, id: str)->Union[Trip,str]:
+        try:
+            result = self.collection.find_one({"_id": ObjectId(id)})
+            result["_id"]=str(result["_id"])
+            result["id"]=result["_id"]
+            result.pop("_id")
+            castedResult=Trip(**result)
+            return castedResult 
+        except Exception as e:
+            return f"Error fetching trip by id: {e}"
 
     def put_trip_by_doc_id(self, id: str, trip: Trip):
-        result = self.collection.update_one({"_id": ObjectId(id)}, {"$set": trip})
-        return result.modified_count > 0
+        try:
+            update_result = self.collection.update_one(
+                {"_id": ObjectId(id)},
+                {"$set": trip.model_dump()}
+            )
+            return update_result.modified_count > 0
+        except Exception as e:
+            return f"Error updating trip: {e}"
 
     def delete_place_from_trip(self, trip_id: str, place_id: str):
+        try:
+            result = self.collection.update_one(
+                {"_id": ObjectId(trip_id)},
+                {"$pull": {"days.$[].places": {"placeId": place_id}}}
+            )
+            return result.modified_count > 0
+        except Exception as e:
+            return f"Error deleting place from trip: {e}"
         result = self.collection.update_one(
             {"_id": ObjectId(trip_id)},
             {"$pull": {"days.$[].places": {"placeId": place_id}}},
