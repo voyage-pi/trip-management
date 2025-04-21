@@ -39,7 +39,11 @@ async def trip_creation(forms: Form):
 
         delta = timedelta(days=forms.duration)
         requestBody = {
+<<<<<<< Updated upstream
             "trip_id": str(documentID),
+=======
+            "trip_id":str(documentID),
+>>>>>>> Stashed changes
             "questionnaire": questionnaire,
             "start_date": forms.dateStart,
             "end_date": forms.dateStart + delta,
@@ -52,7 +56,6 @@ async def trip_creation(forms: Form):
         # Converter datas para string ISO
         requestBody["start_date"] = requestBody["start_date"].isoformat()
         requestBody["end_date"] = requestBody["end_date"].isoformat()
-
         # Depuração
         print("Sending to recommendations service:", json.dumps(requestBody))
         response = request.post(
