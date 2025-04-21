@@ -39,15 +39,13 @@ async def trip_creation(forms: Form):
 
         delta = timedelta(days=forms.duration)
         requestBody = {
-<<<<<<< Updated upstream
             "trip_id": str(documentID),
-=======
-            "trip_id":str(documentID),
->>>>>>> Stashed changes
             "questionnaire": questionnaire,
             "start_date": forms.dateStart,
             "end_date": forms.dateStart + delta,
             "budget": forms.budget,
+            # adding the display name as attribute to the trip
+            "name":display_name
         }
 
         data_type = forms.data_type.model_dump()
@@ -69,8 +67,6 @@ async def trip_creation(forms: Form):
                 status.HTTP_500_INTERNAL_SERVER_ERROR,
             )
         itinerary = response.json()["itinerary"]
-        # adding the display name as attribute to the trip
-        itinerary["name"] = display_name
         # casting the dictionary to Trip BaseModel object
         itinerary = Trip(**itinerary)
         # casting the dictionary to Trip BaseModel object
