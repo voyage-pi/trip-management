@@ -138,6 +138,19 @@ async def update_trip(id: str, trip: Trip):
             )
         return ResponseBody({}, "No trip updated!", status.HTTP_204_NO_CONTENT)
     except Exception as e:
-        return ResponseBody(
-            {"error": e}, "Unexpected error!", status.HTTP_400_BAD_REQUEST
-        )
+
+        return ResponseBody({"error": e}, "Unexpected error!", status.HTTP_400_BAD_REQUEST )
+
+
+@router.get("/users/{user_id}/trips")
+async def get_trips_by_user_id(user_id: str):
+    client = DBClient()
+    try:
+        trips = client.get_trips_by_user_id(user_id)
+        if trips:
+            return ResponseBody({"trips": trips}, "Trips fetched successfully!")
+        else:
+            return ResponseBody({}, "No trips found for this user.", status.HTTP_404_NOT_FOUND)
+    except Exception as e:
+        return ResponseBody({"error": e}, "Unexpected error!", status.HTTP_400_BAD_REQUEST)
+
