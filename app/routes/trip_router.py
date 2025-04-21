@@ -74,6 +74,20 @@ async def trip_creation(forms: Form):
         await redis_client.set(
             str(documentID), json.dumps(itinerary.model_dump()), expire=3600
         )
+        
+        # save at supabase
+        try:
+            user_id = 50  # Hardcoded user ID for now
+            user_trip_response = request.post(
+                f"http://user-management:8080/trips/",
+                params={"trip_id": str(documentID), "user_id": user_id},
+                timeout=10
+            )
+            print(f"User-trip association response: {user_trip_response.status_code} - {user_trip_response.text}")
+        except Exception as user_trip_error:
+            print(f"Error associating user with trip: {str(user_trip_error)}")
+            # Continue execution even if user association fails
+            
         return ResponseBody(
             {"tripId": str(documentID), "itinerary": itinerary.model_dump()},
             "Trips created",
