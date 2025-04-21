@@ -44,6 +44,8 @@ async def trip_creation(forms: Form):
             "start_date": forms.dateStart,
             "end_date": forms.dateStart + delta,
             "budget": forms.budget,
+            # adding the display name as attribute to the trip
+            "name":display_name
         }
 
         data_type = forms.data_type.model_dump()
@@ -52,7 +54,6 @@ async def trip_creation(forms: Form):
         # Converter datas para string ISO
         requestBody["start_date"] = requestBody["start_date"].isoformat()
         requestBody["end_date"] = requestBody["end_date"].isoformat()
-
         # Depuração
         print("Sending to recommendations service:", json.dumps(requestBody))
         response = request.post(
@@ -66,8 +67,6 @@ async def trip_creation(forms: Form):
                 status.HTTP_500_INTERNAL_SERVER_ERROR,
             )
         itinerary = response.json()["itinerary"]
-        # adding the display name as attribute to the trip
-        itinerary["name"] = display_name
         # casting the dictionary to Trip BaseModel object
         itinerary = Trip(**itinerary)
         # casting the dictionary to Trip BaseModel object
