@@ -1,6 +1,6 @@
 from app.database.CacheClient import RedisClient
 from app.schemas.response import ResponseBody
-from fastapi import APIRouter, status
+from fastapi import APIRouter, status,Request
 from app.schemas.trips_schema import Trip, TripSaveRequest
 from app.schemas.forms_schema import Form
 from app.database.MongoClient import DBClient
@@ -75,29 +75,7 @@ async def trip_creation(forms: Form):
         )
         
         # Call user-management service to associate user with trip
-        try:
-            print("user id: ", user_id)
-            user_id = 50  # Hardcoded user ID for now
-            print("user id: ", user_id)
-            user_trip_response = request.post(
-                f"http://user-management:8080/trips/",
-                params={"trip_id": str(documentID), "user_id": user_id},
-                timeout=10
-            )
-            print(f"User-trip association response: {user_trip_response.status_code} - {user_trip_response.text}")
-        except Exception as user_trip_error:
-            print(f"Error associating user with trip: {str(user_trip_error)}")
-            # Continue execution even if user association fails
         
-        # Save the trip to MongoDB, this is for testing purposes, cache should probably be used instead along with the save_trip
-        try:
-            client = DBClient()
-            save_result = client.post_trip([itinerary], [str(documentID)])
-            print(f"Trip saved to MongoDB: {save_result}")
-        except Exception as save_error:
-            print(f"Error saving trip to MongoDB: {str(save_error)}")
-            # Continue execution even if saving fails
-            
         return ResponseBody(
             {"tripId": str(documentID), "itinerary": itinerary.model_dump()},
             "Trips created",
@@ -112,11 +90,27 @@ async def trip_creation(forms: Form):
 
 
 @router.post("/save")
-async def save_trip(trip: TripSaveRequest):
+async def save_trip(trip: TripSaveRequest, rq: Request):
     client = DBClient()
     try:
         result = client.post_trip([trip.itinerary], [trip.id])
         if len(result) != 0:
+            # forwarding the authentication cookie
+            voyage_cookie = rq.cookies.get("voyage_at")
+
+            # Forward the cookie in the outgoing POST request
+            user_trip_response = request.post(
+                f"http://user-management:8080/trips/save",
+                params={"trip_id": str(trip.id)},
+                cookies={"voyage_at": voyage_cookie} if voyage_cookie else None,
+                timeout=10
+            )
+
+            if user_trip_response.status_code != 200:
+                client.delete_trip(trip.id)
+                return ResponseBody(
+                    {}, user_trip_response.text, status.HTTP_500_INTERNAL_SERVER_ERROR
+                )
             return ResponseBody({"trip_id": trip.id}, "Trips saved")
         raise Exception
     except Exception as e:
@@ -124,8 +118,6 @@ async def save_trip(trip: TripSaveRequest):
         return ResponseBody(
             {"error": str(e)}, "", status.HTTP_500_INTERNAL_SERVER_ERROR
         )
-
-
 @router.get("/trips/{id}")
 async def get_trip(id: str):
     client = DBClient()
@@ -166,15 +158,4 @@ async def update_trip(id: str, trip: Trip):
         return ResponseBody({"error": e}, "Unexpected error!", status.HTTP_400_BAD_REQUEST )
 
 
-@router.get("/users/{user_id}/trips")
-async def get_trips_by_user_id(user_id: str):
-    client = DBClient()
-    try:
-        trips = client.get_trips_by_user_id(user_id)
-        if trips:
-            return ResponseBody({"trips": trips}, "Trips fetched successfully!")
-        else:
-            return ResponseBody({}, "No trips found for this user.", status.HTTP_404_NOT_FOUND)
-    except Exception as e:
-        return ResponseBody({"error": e}, "Unexpected error!", status.HTTP_400_BAD_REQUEST)
 
