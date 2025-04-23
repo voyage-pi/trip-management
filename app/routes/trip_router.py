@@ -73,30 +73,6 @@ async def trip_creation(forms: Form):
         await redis_client.set(
             str(documentID), json.dumps(itinerary.model_dump()), expire=3600
         )
-        
-        # Call user-management service to associate user with trip
-        try:
-            print("user id: ", user_id)
-            user_id = 50  # Hardcoded user ID for now
-            print("user id: ", user_id)
-            user_trip_response = request.post(
-                f"http://user-management:8080/trips/",
-                params={"trip_id": str(documentID), "user_id": user_id},
-                timeout=10
-            )
-            print(f"User-trip association response: {user_trip_response.status_code} - {user_trip_response.text}")
-        except Exception as user_trip_error:
-            print(f"Error associating user with trip: {str(user_trip_error)}")
-            # Continue execution even if user association fails
-        
-        # Save the trip to MongoDB, this is for testing purposes, cache should probably be used instead along with the save_trip
-        try:
-            client = DBClient()
-            save_result = client.post_trip([itinerary], [str(documentID)])
-            print(f"Trip saved to MongoDB: {save_result}")
-        except Exception as save_error:
-            print(f"Error saving trip to MongoDB: {str(save_error)}")
-            # Continue execution even if saving fails
             
         return ResponseBody(
             {"tripId": str(documentID), "itinerary": itinerary.model_dump()},
