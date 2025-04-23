@@ -71,6 +71,12 @@ class DBClient:
         except Exception as e:
             return f"Error updating trip: {e}"
 
+    def delete_trip(self,id:str):
+        try:
+            result= self.collection.delete_one({"_id":ObjectId(id)})
+            return result==1
+        except Exception as e:
+            return f"Error updating trip: {e}"
     def delete_place_from_trip(self, trip_id: str, place_id: str):
         try:
             result = self.collection.update_one(

@@ -1,6 +1,6 @@
 from app.database.CacheClient import RedisClient
 from app.schemas.response import ResponseBody
-from fastapi import APIRouter, status
+from fastapi import APIRouter, status,Request
 from app.schemas.trips_schema import Trip, TripSaveRequest
 from app.schemas.forms_schema import Form
 from app.database.MongoClient import DBClient
@@ -73,7 +73,7 @@ async def trip_creation(forms: Form):
         await redis_client.set(
             str(documentID), json.dumps(itinerary.model_dump()), expire=3600
         )
-            
+
         return ResponseBody(
             {"tripId": str(documentID), "itinerary": itinerary.model_dump()},
             "Trips created",
@@ -88,11 +88,27 @@ async def trip_creation(forms: Form):
 
 
 @router.post("/save")
-async def save_trip(trip: TripSaveRequest):
+async def save_trip(trip: TripSaveRequest, rq: Request):
     client = DBClient()
     try:
         result = client.post_trip([trip.itinerary], [trip.id])
         if len(result) != 0:
+            # forwarding the authentication cookie
+            voyage_cookie = rq.cookies.get("voyage_at")
+
+            # Forward the cookie in the outgoing POST request
+            user_trip_response = request.post(
+                f"http://user-management:8080/trips/save",
+                params={"trip_id": str(trip.id)},
+                cookies={"voyage_at": voyage_cookie} if voyage_cookie else None,
+                timeout=10
+            )
+
+            if user_trip_response.status_code != 200:
+                client.delete_trip(trip.id)
+                return ResponseBody(
+                    {}, user_trip_response.text, status.HTTP_500_INTERNAL_SERVER_ERROR
+                )
             return ResponseBody({"trip_id": trip.id}, "Trips saved")
         raise Exception
     except Exception as e:
@@ -100,8 +116,6 @@ async def save_trip(trip: TripSaveRequest):
         return ResponseBody(
             {"error": str(e)}, "", status.HTTP_500_INTERNAL_SERVER_ERROR
         )
-
-
 @router.get("/trips/{id}")
 async def get_trip(id: str):
     client = DBClient()
@@ -142,15 +156,4 @@ async def update_trip(id: str, trip: Trip):
         return ResponseBody({"error": e}, "Unexpected error!", status.HTTP_400_BAD_REQUEST )
 
 
-@router.get("/users/{user_id}/trips")
-async def get_trips_by_user_id(user_id: str):
-    client = DBClient()
-    try:
-        trips = client.get_trips_by_user_id(user_id)
-        if trips:
-            return ResponseBody({"trips": trips}, "Trips fetched successfully!")
-        else:
-            return ResponseBody({}, "No trips found for this user.", status.HTTP_404_NOT_FOUND)
-    except Exception as e:
-        return ResponseBody({"error": e}, "Unexpected error!", status.HTTP_400_BAD_REQUEST)
 
