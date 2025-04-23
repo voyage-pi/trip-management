@@ -73,9 +73,7 @@ async def trip_creation(forms: Form):
         await redis_client.set(
             str(documentID), json.dumps(itinerary.model_dump()), expire=3600
         )
-        
-        # Call user-management service to associate user with trip
-        
+
         return ResponseBody(
             {"tripId": str(documentID), "itinerary": itinerary.model_dump()},
             "Trips created",
