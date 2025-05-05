@@ -68,6 +68,7 @@ async def trip_creation(forms: Form):
             )
         itinerary = response.json()["itinerary"]
         # casting the dictionary to Trip BaseModel object
+        itinerary["trip_type"]=trip_type.value
         itinerary = Trip(**itinerary)
         # casting the dictionary to Trip BaseModel object
         await redis_client.set(

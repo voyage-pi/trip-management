@@ -1,5 +1,6 @@
 from datetime import datetime, timedelta
 from typing import List, Optional, Dict
+from app.schemas.forms_schema import TripType
 from pydantic import BaseModel, field_validator
 from enum import Enum
 
@@ -52,6 +53,7 @@ class Day(BaseModel):
 
 
 class Trip(BaseModel):
+    trip_type:str
     start_date: datetime | str
     end_date: datetime | str
     days: List[Day] = []
