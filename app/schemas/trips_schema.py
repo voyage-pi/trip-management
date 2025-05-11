@@ -53,13 +53,27 @@ class Day(BaseModel):
 
 
 class Trip(BaseModel):
-    trip_type:str
     start_date: datetime | str
     end_date: datetime | str
     days: List[Day] = []
     name: str
 
+class Stop(BaseModel):
+    place:PlaceInfo
+    index:int
+    id:str
+
+class RoadItinerary(BaseModel):
+    name:str
+    stops:List[Stop]
+    routes:List[Route]
+    suggestions:List[PlaceInfo]
+
+class TripResponse(BaseModel):
+    itinerary: Trip | RoadItinerary
+    trip_type:str
 
 class TripSaveRequest(BaseModel):
     id: str
-    itinerary: Trip
+    itinerary: TripResponse 
+

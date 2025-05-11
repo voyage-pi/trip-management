@@ -1,7 +1,7 @@
 from app.database.CacheClient import RedisClient
 from app.schemas.response import ResponseBody
 from fastapi import APIRouter, status,Request
-from app.schemas.trips_schema import Trip, TripSaveRequest
+from app.schemas.trips_schema import RoadItinerary, Trip, TripSaveRequest,TripResponse
 from app.schemas.forms_schema import Form
 from app.database.MongoClient import DBClient
 import requests as request
@@ -68,8 +68,7 @@ async def trip_creation(forms: Form):
             )
         itinerary = response.json()["itinerary"]
         # casting the dictionary to Trip BaseModel object
-        itinerary["trip_type"]=trip_type.value
-        itinerary = Trip(**itinerary)
+        itinerary = TripResponse(itinerary=RoadItinerary(**itinerary) if trip_type.value=="road" else Trip(**itinerary),trip_type=trip_type.value)
         # casting the dictionary to Trip BaseModel object
         await redis_client.set(
             str(documentID), json.dumps(itinerary.model_dump()), expire=3600
