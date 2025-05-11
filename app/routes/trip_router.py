@@ -73,11 +73,9 @@ async def trip_creation(forms: Form):
         await redis_client.set(
             str(documentID), json.dumps(itinerary.model_dump()), expire=3600
         )
-
-        return ResponseBody(
-            {"tripId": str(documentID), "itinerary": itinerary.model_dump()},
-            "Trips created",
-        )
+        sending_dict=itinerary.model_dump()
+        sending_dict["tripId"]=str(documentID)
+        return ResponseBody(sending_dict)
     except Exception as e:
         print(f"Error making request to recommendations service: {str(e)}")
         return ResponseBody(
