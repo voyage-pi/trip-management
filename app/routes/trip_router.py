@@ -144,13 +144,22 @@ async def get_trip(id: str):
         result = await redis_client.get(str(id))
         print("Redis result:", result)
         if result is not None:
-            print("itinerary:", result)
+            print("itinerary from Redis:", result)
+            # If from Redis, result is already a JSON string
             return ResponseBody({"itinerary": json.loads(result)})
+            
+        # Get from MongoDB
         result = client.get_trip_by_id(id)
-        itinerary = result
-        if itinerary is not None:
-            print("itinerary:", itinerary)
-            return ResponseBody({"itinerary": json.loads(itinerary)})
+        if result is not None:
+            print("itinerary from DB:", type(result))
+            # Check if result is a string or a dict
+            if isinstance(result, str):
+                # If string, parse it
+                return ResponseBody({"itinerary": json.loads(result)})
+            else:
+                # If already a dict, use it directly
+                return ResponseBody({"itinerary": result})
+                
         if not isinstance(result, str) and result is not None:
             return ResponseBody(
                 {
@@ -161,7 +170,7 @@ async def get_trip(id: str):
             )
         return ResponseBody({}, "No trip found for this id.", status.HTTP_404_NOT_FOUND)
     except Exception as e:
-        print(f"Error inserting trip into the database: {str(e)}")
+        print(f"Error fetching trip from the database: {str(e)}")
         return ResponseBody(
             {"error": str(e)},
             "Error while fetching for the trip by id.",
