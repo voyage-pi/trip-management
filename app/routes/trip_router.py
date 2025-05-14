@@ -113,6 +113,7 @@ async def save_trip(trip: TripSaveRequest, rq: Request):
         try:
             print(trip.id)
             existing_trip = client.get_trip_by_id(str(trip.id))
+            print("Existing trip:", existing_trip)
             if existing_trip is not None:
                 already_exists = True
                 print("Trip already exists in the database.")
