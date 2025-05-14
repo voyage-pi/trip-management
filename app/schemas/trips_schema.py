@@ -1,11 +1,6 @@
-from datetime import datetime, timedelta
+from datetime import datetime 
 from typing import List, Optional, Dict
-from app.schemas.forms_schema import TripType
-from pydantic import BaseModel, field_validator
-from enum import Enum
-
-# Modified classes for MongoDB compatibility
-
+from pydantic import BaseModel
 
 class LatLong(BaseModel):
     latitude: float

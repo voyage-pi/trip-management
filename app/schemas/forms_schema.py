@@ -1,6 +1,7 @@
-from datetime import datetime, timedelta
-from typing import List,Dict,Any, Optional
-from pydantic import BaseModel
+from datetime import datetime 
+from typing import List,Dict,Any, Annotated,Union,Literal
+from app.schemas.trips_schema import PlaceInfo
+from pydantic import BaseModel,Field
 from enum import Enum
 
 
@@ -28,21 +29,21 @@ class LatLong(BaseModel):
     latitude: float
     longitude: float
 
-
 class Road(BaseModel):
-    origin: LatLong
-    destination: LatLong
-    polylines:str
-
+    type: Literal["road"] = "road"  # Discriminator field
+    origin:PlaceInfo 
+    destination:PlaceInfo 
+    polylines: str
 
 class Place(BaseModel):
+    type: Literal["place"] = "place"  # Discriminator field
     coordinates: LatLong
     place_name: str
 
-
 class Zone(BaseModel):
-    center:LatLong
-    radius:int
+    type: Literal["zone"] = "zone"  # Discriminator field
+    center: LatLong
+    radius: int
 
 class Form(BaseModel):
     budget:float
@@ -50,7 +51,7 @@ class Form(BaseModel):
     display_name:str
     duration:int # duration in days
     tripType:TripType
-    data_type: Place | Zone | Road
+    data_type: Union[Road, Place, Zone] = Field(discriminator="type")  # This tells Pydantic to use the 'type' field
     users:List[str]
     questions:Dict[str,List[Question]]
 
