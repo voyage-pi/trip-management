@@ -1,11 +1,12 @@
 from app.schemas.trips_schema import Trip
 from pymongo import MongoClient
 from bson import ObjectId
-from typing import List,Union
+from typing import List, Union
 from pymongo.errors import PyMongoError
 from dotenv import load_dotenv
 from bson import ObjectId
 import os
+from threading import Lock
 
 load_dotenv()
 
@@ -17,20 +18,38 @@ mongoPwd = os.getenv("MONGOPASSWORD")
 mongoDatabase = os.getenv("MONGO_DATABASE", "voyage-db")
 
 
-
 class DBClient:
+    _instance = None
+    _lock = Lock()
+
+    def __new__(cls, *args, **kwargs):
+        if not cls._instance:
+            with cls._lock:
+                if not cls._instance:
+                    cls._instance = super(DBClient, cls).__new__(cls)
+        return cls._instance
+
     def __init__(self):
+        # Prevent reinitialization on multiple instantiations
+        if hasattr(self, "_initialized") and self._initialized:
+            return
+
         try:
-            url = f"mongodb://{mongoUser}:{mongoPwd}@{mongoHost}:{mongoPort}/"
+            url = f"mongodb://{mongoUser}:{mongoPwd}@{mongoHost}:{mongoPort}/voyage-db?authSource=admin"
             self.client = MongoClient(url)
             self.db = self.client[str(mongoDatabase)]
             self.collection = self.db["trips"]
+            self._initialized = True
         except PyMongoError as e:
             raise ConnectionError(f"Failed to connect to MongoDB: {e}")
 
-    def post_trip(self, trips: List[Trip], ids: List[str] = []) -> Union[List[str], str]:
-        assert (len(trips) == len(ids) or not ids), "Length of trips and ids must match or ids must be empty"
-        assert (len(trips) != 0), "Trips list must not be empty"
+    def post_trip(
+        self, trips: List[Trip], ids: List[str] = []
+    ) -> Union[List[str], str]:
+        assert (
+            len(trips) == len(ids) or not ids
+        ), "Length of trips and ids must match or ids must be empty"
+        assert len(trips) != 0, "Trips list must not be empty"
         documents = []
 
         for i, t in enumerate(trips):
@@ -50,38 +69,41 @@ class DBClient:
         except PyMongoError as e:
             return f"Error inserting into the database: {e}"
 
-    def get_trip_by_id(self, id: str)->Union[Trip,str]:
+    def get_trip_by_id(self, id: str) -> Union[Trip, str]:
         try:
             result = self.collection.find_one({"_id": ObjectId(id)})
-            result["_id"]=str(result["_id"])
-            result["id"]=result["_id"]
+            result["_id"] = str(result["_id"])
+            result["id"] = result["_id"]
             result.pop("_id")
-            castedResult=Trip(**result)
-            return castedResult 
+            castedResult = Trip(**result)
+            print("Feched")
+            print("Casted result:", castedResult)
+            return castedResult
         except Exception as e:
-            return f"Error fetching trip by id: {e}"
+            print(f"Error fetching trip by id: {e}")
+            return None
 
     def put_trip_by_doc_id(self, id: str, trip: Trip):
         try:
             update_result = self.collection.update_one(
-                {"_id": ObjectId(id)},
-                {"$set": trip.model_dump()}
+                {"_id": ObjectId(id)}, {"$set": trip.model_dump()}
             )
             return update_result.modified_count > 0
         except Exception as e:
             return f"Error updating trip: {e}"
 
-    def delete_trip(self,id:str):
+    def delete_trip(self, id: str):
         try:
-            result= self.collection.delete_one({"_id":ObjectId(id)})
-            return result==1
+            result = self.collection.delete_one({"_id": ObjectId(id)})
+            return result == 1
         except Exception as e:
             return f"Error updating trip: {e}"
+
     def delete_place_from_trip(self, trip_id: str, place_id: str):
         try:
             result = self.collection.update_one(
                 {"_id": ObjectId(trip_id)},
-                {"$pull": {"days.$[].places": {"placeId": place_id}}}
+                {"$pull": {"days.$[].places": {"placeId": place_id}}},
             )
             return result.modified_count > 0
         except Exception as e:
@@ -96,9 +118,3 @@ class DBClient:
         result = list(self.collection.find({}))
         parsed_documents = [{**doc, "_id": str(doc["_id"])} for doc in result]
         return parsed_documents
-    
-    def get_trip_by_id(self, id: str):  
-        result = self.collection.find_one({"_id": ObjectId(id)})
-        if result:
-            result["_id"] = str(result["_id"])
-        return result
