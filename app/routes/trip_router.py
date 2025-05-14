@@ -67,15 +67,16 @@ async def trip_creation(forms: Form):
                 status.HTTP_500_INTERNAL_SERVER_ERROR,
             )
         itinerary = response.json()["itinerary"]
+        itinerary["trip_type"]=trip_type.value
         # casting the dictionary to Trip BaseModel object
-        itinerary = TripResponse(itinerary=RoadItinerary(**itinerary) if trip_type.value=="road" else Trip(**itinerary),trip_type=trip_type.value)
+        current_trip=dict()
+        current_trip["itinerary"]=RoadItinerary(**itinerary).model_dump() if trip_type.value=="road" else Trip(**itinerary).model_dump()
+        current_trip["tripId"]=str(documentID)
         # casting the dictionary to Trip BaseModel object
         await redis_client.set(
-            str(documentID), json.dumps(itinerary.model_dump()), expire=3600
+            str(documentID), json.dumps(current_trip["itinerary"]), expire=3600
         )
-        sending_dict=itinerary.model_dump()
-        sending_dict["tripId"]=str(documentID)
-        return ResponseBody(sending_dict)
+        return ResponseBody(TripResponse(**current_trip).model_dump())
     except Exception as e:
         print(f"Error making request to recommendations service: {str(e)}")
         return ResponseBody(
@@ -103,7 +104,8 @@ async def save_trip(trip: TripSaveRequest, rq: Request):
                 "Error while validating trip data",
                 status.HTTP_400_BAD_REQUEST,
             )
-
+        # add the trip_type onto the itinerary itself
+        trip.itinerary.trip_type=trip.trip_type
         result = client.post_trip([trip.itinerary], [trip.id])
         if len(result) != 0:
             # forwarding the authentication cookie
