@@ -25,6 +25,7 @@ redis_client = RedisClient()
 # Mock trips data
 @router.post("/trips")
 async def trip_creation(forms: Form):
+    print(forms)
     try:
         # generate document Id for itinerary document and cache
         documentID = ObjectId()
@@ -38,6 +39,22 @@ async def trip_creation(forms: Form):
                 )
 
         delta = timedelta(days=forms.duration)
+
+        must_visit_places = []
+
+        if forms.must_visit_places:
+            for place in forms.must_visit_places:
+                must_visit_places.append(
+                    {
+                        "place_name": place.place_name,
+                        "coordinates": {
+                            "latitude": place.coordinates.latitude,
+                            "longitude": place.coordinates.longitude,
+                        },
+                        "place_id": place.place_id,
+                    }
+                )
+
         requestBody = {
             "trip_id": str(documentID),
             "questionnaire": questionnaire,
@@ -46,6 +63,7 @@ async def trip_creation(forms: Form):
             "budget": forms.budget,
             # adding the display name as attribute to the trip
             "name": display_name,
+            "must_visit_places": must_visit_places,
         }
 
         data_type = forms.data_type.model_dump()
@@ -147,7 +165,7 @@ async def get_trip(id: str):
             print("itinerary from Redis:", result)
             # If from Redis, result is already a JSON string
             return ResponseBody({"itinerary": json.loads(result)})
-            
+
         # Get from MongoDB
         result = client.get_trip_by_id(id)
         if result is not None:
@@ -159,7 +177,7 @@ async def get_trip(id: str):
             else:
                 # If already a dict, use it directly
                 return ResponseBody({"itinerary": result})
-                
+
         if not isinstance(result, str) and result is not None:
             return ResponseBody(
                 {

@@ -1,5 +1,5 @@
 from datetime import datetime, timedelta
-from typing import List,Dict,Any, Optional
+from typing import List, Dict, Any, Optional
 from pydantic import BaseModel
 from enum import Enum
 
@@ -37,20 +37,21 @@ class Road(BaseModel):
 class Place(BaseModel):
     coordinates: LatLong
     place_name: str
+    place_id: Optional[str] = None
 
 
 class Zone(BaseModel):
-    center:LatLong
-    radius:int
+    center: LatLong
+    radius: int
+
 
 class Form(BaseModel):
-    budget:float
-    dateStart:datetime
-    display_name:str
-    duration:int # duration in days
-    tripType:TripType
+    budget: float
+    dateStart: datetime
+    display_name: str
+    duration: int  # duration in days
+    tripType: TripType
     data_type: Place | Zone | Road
-    users:List[str]
-    questions:Dict[str,List[Question]]
-
-
+    users: List[str]
+    questions: Dict[str, List[Question]]
+    must_visit_places: Optional[List[Place]] = None
