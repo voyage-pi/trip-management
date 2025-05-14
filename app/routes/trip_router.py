@@ -45,7 +45,7 @@ async def trip_creation(forms: Form):
             "end_date": forms.dateStart + delta,
             "budget": forms.budget,
             # adding the display name as attribute to the trip
-            "name":display_name
+            "name": display_name,
         }
 
         data_type = forms.data_type.model_dump()
@@ -89,24 +89,43 @@ async def trip_creation(forms: Form):
 async def save_trip(trip: TripSaveRequest, rq: Request):
     client = DBClient()
     try:
+        already_exists = False
+        try:
+            print(trip.id)
+            existing_trip = client.get_trip_by_id(str(trip.id))
+            if existing_trip is not None:
+                already_exists = True
+                print("Trip already exists in the database.")
+        except ValidationError as e:
+            print(f"Validation error: {str(e)}")
+            return ResponseBody(
+                {"error": str(e)},
+                "Error while validating trip data",
+                status.HTTP_400_BAD_REQUEST,
+            )
+
         result = client.post_trip([trip.itinerary], [trip.id])
         if len(result) != 0:
             # forwarding the authentication cookie
             voyage_cookie = rq.cookies.get("voyage_at")
 
             # Forward the cookie in the outgoing POST request
-            user_trip_response = request.post(
-                f"http://user-management:8080/trips/save",
-                params={"trip_id": str(trip.id)},
-                cookies={"voyage_at": voyage_cookie} if voyage_cookie else None,
-                timeout=10
-            )
-
-            if user_trip_response.status_code != 200:
-                client.delete_trip(trip.id)
-                return ResponseBody(
-                    {}, user_trip_response.text, status.HTTP_500_INTERNAL_SERVER_ERROR
+            if not already_exists:
+                print("Trip created")
+                user_trip_response = request.post(
+                    f"http://user-management:8080/trips/save",
+                    params={"trip_id": str(trip.id)},
+                    cookies={"voyage_at": voyage_cookie} if voyage_cookie else None,
+                    timeout=10,
                 )
+
+                if user_trip_response.status_code != 200:
+                    client.delete_trip(trip.id)
+                    return ResponseBody(
+                        {},
+                        user_trip_response.text,
+                        status.HTTP_500_INTERNAL_SERVER_ERROR,
+                    )
             return ResponseBody({"trip_id": trip.id}, "Trips saved")
         raise Exception
     except Exception as e:
@@ -114,14 +133,31 @@ async def save_trip(trip: TripSaveRequest, rq: Request):
         return ResponseBody(
             {"error": str(e)}, "", status.HTTP_500_INTERNAL_SERVER_ERROR
         )
+
+
 @router.get("/trips/{id}")
 async def get_trip(id: str):
     client = DBClient()
     try:
-        itinerary = await redis_client.get(str(id))
-        if itinerary is not None:
-            return ResponseBody({"itinerary": json.loads(itinerary)})
+        result = await redis_client.get(str(id))
+        print("Redis result:", result)
+        if result is not None:
+            print("itinerary from Redis:", result)
+            # If from Redis, result is already a JSON string
+            return ResponseBody({"itinerary": json.loads(result)})
+            
+        # Get from MongoDB
         result = client.get_trip_by_id(id)
+        if result is not None:
+            print("itinerary from DB:", type(result))
+            # Check if result is a string or a dict
+            if isinstance(result, str):
+                # If string, parse it
+                return ResponseBody({"itinerary": json.loads(result)})
+            else:
+                # If already a dict, use it directly
+                return ResponseBody({"itinerary": result})
+                
         if not isinstance(result, str) and result is not None:
             return ResponseBody(
                 {
@@ -132,7 +168,7 @@ async def get_trip(id: str):
             )
         return ResponseBody({}, "No trip found for this id.", status.HTTP_404_NOT_FOUND)
     except Exception as e:
-        print(f"Error inserting trip into the database: {str(e)}")
+        print(f"Error fetching trip from the database: {str(e)}")
         return ResponseBody(
             {"error": str(e)},
             "Error while fetching for the trip by id.",
@@ -151,7 +187,41 @@ async def update_trip(id: str, trip: Trip):
         return ResponseBody({}, "No trip updated!", status.HTTP_204_NO_CONTENT)
     except Exception as e:
 
-        return ResponseBody({"error": e}, "Unexpected error!", status.HTTP_400_BAD_REQUEST )
+        return ResponseBody(
+            {"error": e}, "Unexpected error!", status.HTTP_400_BAD_REQUEST
+        )
 
 
+@router.post("/trip/{trip_id}/regenerate-activity")
+async def regenerate_activity(trip_id: str, activity: dict):
+    try:
+        recommendations_url = (
+            f"http://recommendations:8080/trip/{trip_id}/regenerate-activity"
+        )
+        response = request.post(recommendations_url, json=activity, timeout=40)
 
+        if response.status_code != 200:
+            return ResponseBody(
+                {"error": response.text},
+                "Error from recommendations service",
+                status.HTTP_500_INTERNAL_SERVER_ERROR,
+            )
+
+        updated_itinerary = response.json()["response"]["itinerary"]
+        trip = Trip(**updated_itinerary)
+
+        await redis_client.set(str(trip_id), json.dumps(trip.model_dump()), expire=3600)
+
+        return ResponseBody(
+            {"itinerary": updated_itinerary},
+            "Activity regenerated successfully",
+            status.HTTP_200_OK,
+        )
+
+    except Exception as e:
+        print(f"Error regenerating activity: {str(e)}")
+        return ResponseBody(
+            {"error": str(e)},
+            "Error regenerating activity",
+            status.HTTP_500_INTERNAL_SERVER_ERROR,
+        )
