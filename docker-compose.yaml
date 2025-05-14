@@ -16,5 +16,3 @@ services:
   mongo-trip:
       image: mongo
       restart: always
-      ports:
-        - 27017:27017
