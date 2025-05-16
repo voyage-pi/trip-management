@@ -38,7 +38,9 @@ async def trip_creation(forms: Form):
                     {"question_id": q.question_id, "value": q.value, "type": "scale"}
                 )
 
-        delta = timedelta(days=forms.duration)
+        # Ensure duration is at least 1 day
+        duration = max(1, forms.duration)
+        delta = timedelta(days=duration)
 
         must_visit_places = []
 
@@ -55,23 +57,34 @@ async def trip_creation(forms: Form):
                     }
                 )
 
+        # Convert startDate string to datetime object with proper error handling
+        try:
+            # Handle ISO format string with Z (UTC) timezone
+            if forms.startDate.endswith('Z'):
+                start_date = datetime.fromisoformat(forms.startDate.replace('Z', '+00:00'))
+            else:
+                start_date = datetime.fromisoformat(forms.startDate)
+        except (ValueError, TypeError):
+            # Default to current date if parsing fails
+            print(f"Invalid date format: {forms.startDate}, using current date instead")
+            start_date = datetime.now()
+            
+        end_date = start_date + delta
+
         requestBody = {
             "trip_id": str(documentID),
             "questionnaire": questionnaire,
-            "start_date": forms.dateStart,
-            "end_date": forms.dateStart + delta,
+            "start_date": start_date.isoformat(),
+            "end_date": end_date.isoformat(),
             "budget": forms.budget,
             # adding the display name as attribute to the trip
             "name": display_name,
             "must_visit_places": must_visit_places,
+            "keywords": forms.keywords,
         }
 
-        data_type = forms.data_type.model_dump()
-        requestBody["data"] = data_type
+        requestBody["data"] = forms.data_type.model_dump()
         requestBody["tripType"] = trip_type.value
-        # Converter datas para string ISO
-        requestBody["start_date"] = requestBody["start_date"].isoformat()
-        requestBody["end_date"] = requestBody["end_date"].isoformat()
         # Depuração
         print("Sending to recommendations service:", json.dumps(requestBody))
         response = request.post(
