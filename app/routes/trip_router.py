@@ -37,26 +37,9 @@ async def trip_creation(forms: Form):
                 questionnaire.append(
                     {"question_id": q.question_id, "value": q.value, "type": "scale"}
                 )
-
         # Ensure duration is at least 1 day
         duration = max(1, forms.duration)
         delta = timedelta(days=duration)
-
-        must_visit_places = []
-
-        if forms.must_visit_places:
-            for place in forms.must_visit_places:
-                must_visit_places.append(
-                    {
-                        "place_name": place.place_name,
-                        "coordinates": {
-                            "latitude": place.coordinates.latitude,
-                            "longitude": place.coordinates.longitude,
-                        },
-                        "place_id": place.place_id,
-                    }
-                )
-
         # Convert startDate string to datetime object with proper error handling
         try:
             # Handle ISO format string with Z (UTC) timezone
@@ -68,7 +51,11 @@ async def trip_creation(forms: Form):
             # Default to current date if parsing fails
             print(f"Invalid date format: {forms.startDate}, using current date instead")
             start_date = datetime.now()
-            
+            return ResponseBody(
+                {},
+                "Error connecting to recommendations service",
+                status.HTTP_500_INTERNAL_SERVER_ERROR,
+            )
         end_date = start_date + delta
 
         requestBody = {
@@ -79,7 +66,7 @@ async def trip_creation(forms: Form):
             "budget": forms.budget,
             # adding the display name as attribute to the trip
             "name": display_name,
-            "must_visit_places": must_visit_places,
+            "must_visit_places": [mvp.model_dump() for mvp in forms.must_visit_places],
             "keywords": forms.keywords,
         }
 
