@@ -1,22 +1,26 @@
 from datetime import datetime 
 from typing import List,Dict,Any, Annotated,Union,Literal,Optional
-from app.schemas.trips_schema import PlaceInfo
+from app.schemas.trips_schema import PlaceInfo, MustVisitPlace
 from pydantic import BaseModel,Field
 from enum import Enum
 
 
-class QuestionType(Enum):
+class QuestionType(str, Enum):
     SCALE = "scale"
     SELECT = "select"
 
 
 class Question(BaseModel):
     question_id: int
-    value: Any
+    value: Optional[int]
     type: QuestionType
 
     class Config:
         use_enum_values = True
+
+
+class UserQuestions(BaseModel):
+    questions: List[Question]
 
 
 class TripType(Enum):
@@ -47,12 +51,12 @@ class Zone(BaseModel):
     radius: int
 
 class Form(BaseModel):
-    budget:float
-    dateStart:datetime
-    display_name:str
-    duration:int # duration in days
-    tripType:TripType
-    data_type: Union[Road, Place, Zone] = Field(discriminator="type")  # This tells Pydantic to use the 'type' field
-    users:List[str]
-    questions:Dict[str,List[Question]]
-    must_visit_places: Optional[List[Place]] = None
+    budget: float
+    startDate: str
+    duration: int = 3
+    questions: Dict[str, List[Question]]
+    must_visit_places: List[MustVisitPlace] = []
+    keywords: List[str] = []
+    tripType: TripType
+    display_name: str
+    data_type: Union[Zone, Place, Road] = Field(discriminator="type")
