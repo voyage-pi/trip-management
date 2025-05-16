@@ -16,3 +16,8 @@ services:
   mongo-trip:
       image: mongo
       restart: always
+      volumes:
+        - mongo_data:/data/db
+
+volumes:
+  mongo_data:
