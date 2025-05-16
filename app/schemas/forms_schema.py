@@ -1,6 +1,5 @@
-from datetime import datetime 
-from typing import List,Dict,Any, Annotated,Union,Literal,Optional
-from app.schemas.trips_schema import PlaceInfo, MustVisitPlace
+from typing import List,Dict,Union,Literal,Optional
+from app.schemas.trips_schema import PlaceInfo 
 from pydantic import BaseModel,Field
 from enum import Enum
 
@@ -55,7 +54,7 @@ class Form(BaseModel):
     startDate: str
     duration: int = 3
     questions: Dict[str, List[Question]]
-    must_visit_places: List[MustVisitPlace] = []
+    must_visit_places: List[PlaceInfo] = []
     keywords: List[str] = []
     tripType: TripType
     display_name: str

@@ -24,13 +24,6 @@ class PlaceInfo(BaseModel):
     good_for_children: Optional[bool] = None
     good_for_groups: Optional[bool] = None
 
-
-class MustVisitPlace(BaseModel):
-    place_name: str
-    coordinates: LatLong
-    place_id: Optional[str] = None
-
-
 class Activity(BaseModel):
     id: int
     place: PlaceInfo
