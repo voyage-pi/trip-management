@@ -1,7 +1,7 @@
 from app.database.CacheClient import RedisClient
 from app.schemas.response import ResponseBody
-from fastapi import APIRouter, status, Request
-from app.schemas.trips_schema import Trip, TripSaveRequest
+from fastapi import APIRouter, status,Request
+from app.schemas.trips_schema import RoadItinerary, Trip, TripSaveRequest,TripResponse
 from app.schemas.forms_schema import Form
 from app.database.MongoClient import DBClient
 import requests as request
@@ -31,47 +31,51 @@ async def trip_creation(forms: Form):
         documentID = ObjectId()
         trip_type = forms.tripType
         display_name = forms.display_name
+        country = forms.country
+        city = forms.city
         questionnaire = []
         for user_id, user_questions in forms.questions.items():
             for q in user_questions:
                 questionnaire.append(
                     {"question_id": q.question_id, "value": q.value, "type": "scale"}
                 )
-
-        delta = timedelta(days=forms.duration)
-
-        must_visit_places = []
-
-        if forms.must_visit_places:
-            for place in forms.must_visit_places:
-                must_visit_places.append(
-                    {
-                        "place_name": place.place_name,
-                        "coordinates": {
-                            "latitude": place.coordinates.latitude,
-                            "longitude": place.coordinates.longitude,
-                        },
-                        "place_id": place.place_id,
-                    }
-                )
+        # Ensure duration is at least 1 day
+        duration = max(1, forms.duration)
+        delta = timedelta(days=duration)
+        # Convert startDate string to datetime object with proper error handling
+        try:
+            # Handle ISO format string with Z (UTC) timezone
+            if forms.startDate.endswith('Z'):
+                start_date = datetime.fromisoformat(forms.startDate.replace('Z', '+00:00'))
+            else:
+                start_date = datetime.fromisoformat(forms.startDate)
+        except (ValueError, TypeError):
+            # Default to current date if parsing fails
+            print(f"Invalid date format: {forms.startDate}, using current date instead")
+            start_date = datetime.now()
+            return ResponseBody(
+                {},
+                "Error connecting to recommendations service",
+                status.HTTP_500_INTERNAL_SERVER_ERROR,
+            )
+        end_date = start_date + delta
 
         requestBody = {
             "trip_id": str(documentID),
             "questionnaire": questionnaire,
-            "start_date": forms.dateStart,
-            "end_date": forms.dateStart + delta,
+            "start_date": start_date.isoformat(),
+            "end_date": end_date.isoformat(),
             "budget": forms.budget,
             # adding the display name as attribute to the trip
             "name": display_name,
-            "must_visit_places": must_visit_places,
+            "must_visit_places": [mvp.model_dump() for mvp in forms.must_visit_places],
+            "keywords": forms.keywords,
+            "country": country,
+            "city": city,
         }
 
-        data_type = forms.data_type.model_dump()
-        requestBody["data"] = data_type
+        requestBody["data"] = forms.data_type.model_dump()
         requestBody["tripType"] = trip_type.value
-        # Converter datas para string ISO
-        requestBody["start_date"] = requestBody["start_date"].isoformat()
-        requestBody["end_date"] = requestBody["end_date"].isoformat()
         # Depuração
         print("Sending to recommendations service:", json.dumps(requestBody))
         response = request.post(
@@ -85,17 +89,18 @@ async def trip_creation(forms: Form):
                 status.HTTP_500_INTERNAL_SERVER_ERROR,
             )
         itinerary = response.json()["itinerary"]
+        itinerary["trip_type"]=trip_type.value
+        itinerary["country"]=country
+        itinerary["city"]=city
         # casting the dictionary to Trip BaseModel object
-        itinerary = Trip(**itinerary)
+        current_trip=dict()
+        current_trip["itinerary"]=RoadItinerary(**itinerary).model_dump() if trip_type.value=="road" else Trip(**itinerary).model_dump()
+        current_trip["tripId"]=str(documentID)
         # casting the dictionary to Trip BaseModel object
         await redis_client.set(
-            str(documentID), json.dumps(itinerary.model_dump()), expire=3600
+            str(documentID), json.dumps(current_trip["itinerary"]), expire=3600
         )
-
-        return ResponseBody(
-            {"tripId": str(documentID), "itinerary": itinerary.model_dump()},
-            "Trips created",
-        )
+        return ResponseBody(TripResponse(**current_trip).model_dump())
     except Exception as e:
         print(f"Error making request to recommendations service: {str(e)}")
         return ResponseBody(
@@ -124,7 +129,10 @@ async def save_trip(trip: TripSaveRequest, rq: Request):
                 "Error while validating trip data",
                 status.HTTP_400_BAD_REQUEST,
             )
-
+        # add the trip_type onto the itinerary itself
+        trip.itinerary.trip_type=trip.trip_type
+        trip.itinerary.country=trip.itinerary.country
+        trip.itinerary.city=trip.itinerary.city
         result = client.post_trip([trip.itinerary], [trip.id])
         if len(result) != 0:
             # forwarding the authentication cookie
