@@ -52,6 +52,8 @@ class Trip(BaseModel):
     days: List[Day] = []
     name: str
     trip_type:Optional[str]
+    country:str | None = None
+    city:str | None = None
 
 class Stop(BaseModel):
     place:PlaceInfo
@@ -64,6 +66,8 @@ class RoadItinerary(BaseModel):
     routes:List[Route]
     suggestions:List[PlaceInfo]
     trip_type:Optional[str]
+    country:str | None = None
+    city:str | None = None
 
 class TripResponse(BaseModel):
     itinerary: Trip | RoadItinerary

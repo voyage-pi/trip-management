@@ -31,6 +31,8 @@ async def trip_creation(forms: Form):
         documentID = ObjectId()
         trip_type = forms.tripType
         display_name = forms.display_name
+        country = forms.country
+        city = forms.city
         questionnaire = []
         for user_id, user_questions in forms.questions.items():
             for q in user_questions:
@@ -68,6 +70,8 @@ async def trip_creation(forms: Form):
             "name": display_name,
             "must_visit_places": [mvp.model_dump() for mvp in forms.must_visit_places],
             "keywords": forms.keywords,
+            "country": country,
+            "city": city,
         }
 
         requestBody["data"] = forms.data_type.model_dump()
@@ -86,6 +90,8 @@ async def trip_creation(forms: Form):
             )
         itinerary = response.json()["itinerary"]
         itinerary["trip_type"]=trip_type.value
+        itinerary["country"]=country
+        itinerary["city"]=city
         # casting the dictionary to Trip BaseModel object
         current_trip=dict()
         current_trip["itinerary"]=RoadItinerary(**itinerary).model_dump() if trip_type.value=="road" else Trip(**itinerary).model_dump()
@@ -125,6 +131,8 @@ async def save_trip(trip: TripSaveRequest, rq: Request):
             )
         # add the trip_type onto the itinerary itself
         trip.itinerary.trip_type=trip.trip_type
+        trip.itinerary.country=trip.itinerary.country
+        trip.itinerary.city=trip.itinerary.city
         result = client.post_trip([trip.itinerary], [trip.id])
         if len(result) != 0:
             # forwarding the authentication cookie
@@ -177,7 +185,7 @@ async def get_trip(id: str):
                 return ResponseBody({"itinerary": json.loads(result)})
             else:
                 # If already a dict, use it directly
-                return ResponseBody({"itinerary": result})
+                return ResponseBody({"itinerary": result.model_dump()})
 
         if not isinstance(result, str) and result is not None:
             return ResponseBody(

@@ -58,4 +58,6 @@ class Form(BaseModel):
     keywords: List[str] = []
     tripType: TripType
     display_name: str
+    country: str | None = None
+    city: str | None = None
     data_type: Union[Zone, Place, Road] = Field(discriminator="type")
