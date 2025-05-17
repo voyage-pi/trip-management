@@ -179,22 +179,16 @@ async def get_trip(id: str):
         result = client.get_trip_by_id(id)
         if result is not None:
             print("itinerary from DB:", type(result))
-            # Check if result is a string or a dict
-            if isinstance(result, str):
-                # If string, parse it
+            # Ensure Trip object is properly serialized
+            if isinstance(result, Trip):
+                return ResponseBody({"itinerary": result.model_dump()})
+            # If string, parse it
+            elif isinstance(result, str):
                 return ResponseBody({"itinerary": json.loads(result)})
+            # If already a dict, use it directly
             else:
-                # If already a dict, use it directly
                 return ResponseBody({"itinerary": result.model_dump()})
 
-        if not isinstance(result, str) and result is not None:
-            return ResponseBody(
-                {
-                    "itinerary": (
-                        result.model_dump() if isinstance(result, Trip) else result
-                    )
-                }
-            )
         return ResponseBody({}, "No trip found for this id.", status.HTTP_404_NOT_FOUND)
     except Exception as e:
         print(f"Error fetching trip from the database: {str(e)}")
@@ -252,5 +246,54 @@ async def regenerate_activity(trip_id: str, activity: dict):
         return ResponseBody(
             {"error": str(e)},
             "Error regenerating activity",
+            status.HTTP_500_INTERNAL_SERVER_ERROR,
+        )
+
+# delete activity
+@router.delete("/trip/{trip_id}/activity/{activity_id}")
+async def delete_activity(trip_id: str, activity_id: str):
+    try:
+        # First get the current trip to preserve trip_type
+        current_trip = await redis_client.get(str(trip_id))
+        if not current_trip:
+            return ResponseBody(
+                {"error": "Trip not found"},
+                "Trip not found",
+                status.HTTP_404_NOT_FOUND,
+            )
+        current_trip_data = json.loads(current_trip)
+        trip_type = current_trip_data.get('trip_type')
+
+        recommendations_url = f"http://recommendations:8080/trip/{trip_id}/delete-activity/{activity_id}"
+        response = request.delete(recommendations_url, timeout=40)
+
+        if response.status_code != 200:
+            return ResponseBody(
+                {"error": response.text},
+                "Error from recommendations service",
+                status.HTTP_500_INTERNAL_SERVER_ERROR,
+            )
+
+        updated_itinerary = response.json()["response"]["itinerary"]
+        # Preserve the trip_type in the updated itinerary
+        if trip_type:
+            updated_itinerary['trip_type'] = trip_type
+        trip = Trip(**updated_itinerary)
+
+        # Update in Redis cache
+        await redis_client.set(str(trip_id), json.dumps(trip.model_dump()), expire=3600)
+
+        # Return response in the same structure as regenerate_activity
+        return ResponseBody(
+            {"response": {"itinerary": updated_itinerary}},
+            "Activity deleted successfully",
+            status.HTTP_200_OK,
+        )
+
+    except Exception as e:
+        print(f"Error deleting activity: {str(e)}")
+        return ResponseBody(
+            {"error": str(e)},
+            "Error deleting activity",
             status.HTTP_500_INTERNAL_SERVER_ERROR,
         )

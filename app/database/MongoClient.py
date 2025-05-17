@@ -72,11 +72,14 @@ class DBClient:
     def get_trip_by_id(self, id: str) -> Union[Trip, str]:
         try:
             result = self.collection.find_one({"_id": ObjectId(id)})
+            if result is None:
+                return None
+                
             result["_id"] = str(result["_id"])
             result["id"] = result["_id"]
             result.pop("_id")
             castedResult = Trip(**result)
-            print("Feched")
+            print("Fetched")
             print("Casted result:", castedResult)
             return castedResult
         except Exception as e:
