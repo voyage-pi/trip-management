@@ -72,6 +72,7 @@ async def trip_creation(forms: Form):
             "keywords": forms.keywords,
             "country": country,
             "city": city,
+            "is_group": forms.is_group,
         }
 
         requestBody["data"] = forms.data_type.model_dump()
@@ -133,6 +134,7 @@ async def save_trip(trip: TripSaveRequest, rq: Request):
         trip.itinerary.trip_type=trip.trip_type
         trip.itinerary.country=trip.itinerary.country
         trip.itinerary.city=trip.itinerary.city
+        trip.itinerary.is_group=trip.is_group
         result = client.post_trip([trip.itinerary], [trip.id])
         if len(result) != 0:
             # forwarding the authentication cookie
@@ -143,7 +145,10 @@ async def save_trip(trip: TripSaveRequest, rq: Request):
                 print("Trip created")
                 user_trip_response = request.post(
                     f"http://user-management:8080/trips/save",
-                    params={"trip_id": str(trip.id)},
+                    json={
+                        "trip_id": str(trip.id),
+                        "is_group": bool(trip.is_group)
+                            },
                     cookies={"voyage_at": voyage_cookie} if voyage_cookie else None,
                     timeout=10,
                 )

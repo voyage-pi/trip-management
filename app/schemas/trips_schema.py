@@ -51,30 +51,33 @@ class Trip(BaseModel):
     end_date: datetime | str
     days: List[Day] = []
     name: str
-    trip_type:Optional[str]
-    country:str | None = None
-    city:str | None = None
+    trip_type: Optional[str]
+    country: str | None = None
+    city: str | None = None
+    is_group: bool
 
 class Stop(BaseModel):
-    place:PlaceInfo
-    index:int
-    id:str
+    place: PlaceInfo
+    index: int
+    id: str
 
 class RoadItinerary(BaseModel):
-    name:str
-    stops:List[Stop]
-    routes:List[Route]
-    suggestions:List[PlaceInfo]
-    trip_type:Optional[str]
-    country:str | None = None
-    city:str | None = None
+    name: str
+    stops: List[Stop]
+    routes: List[Route]
+    suggestions: List[PlaceInfo]
+    trip_type: Optional[str]
+    country: str | None = None
+    city: str | None = None
+    is_group: bool
 
 class TripResponse(BaseModel):
     itinerary: Trip | RoadItinerary
-    tripId:str
+    tripId: str
 
 class TripSaveRequest(BaseModel):
     id: str
-    itinerary:Trip | RoadItinerary
-    trip_type:str
+    itinerary: Trip | RoadItinerary
+    trip_type: str
+    is_group: bool
 
