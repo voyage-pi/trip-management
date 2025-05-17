@@ -187,7 +187,7 @@ async def get_trip(id: str):
                 return ResponseBody({"itinerary": json.loads(result)})
             # If already a dict, use it directly
             else:
-                return ResponseBody({"itinerary": result})
+                return ResponseBody({"itinerary": result.model_dump()})
 
         return ResponseBody({}, "No trip found for this id.", status.HTTP_404_NOT_FOUND)
     except Exception as e:
