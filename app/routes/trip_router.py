@@ -253,6 +253,17 @@ async def regenerate_activity(trip_id: str, activity: dict):
 @router.delete("/trip/{trip_id}/activity/{activity_id}")
 async def delete_activity(trip_id: str, activity_id: str):
     try:
+        # First get the current trip to preserve trip_type
+        current_trip = await redis_client.get(str(trip_id))
+        if not current_trip:
+            return ResponseBody(
+                {"error": "Trip not found"},
+                "Trip not found",
+                status.HTTP_404_NOT_FOUND,
+            )
+        current_trip_data = json.loads(current_trip)
+        trip_type = current_trip_data.get('trip_type')
+
         recommendations_url = f"http://recommendations:8080/trip/{trip_id}/delete-activity/{activity_id}"
         response = request.delete(recommendations_url, timeout=40)
 
@@ -264,6 +275,9 @@ async def delete_activity(trip_id: str, activity_id: str):
             )
 
         updated_itinerary = response.json()["response"]["itinerary"]
+        # Preserve the trip_type in the updated itinerary
+        if trip_type:
+            updated_itinerary['trip_type'] = trip_type
         trip = Trip(**updated_itinerary)
 
         # Update in Redis cache
