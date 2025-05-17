@@ -61,3 +61,4 @@ class Form(BaseModel):
     country: str | None = None
     city: str | None = None
     data_type: Union[Zone, Place, Road] = Field(discriminator="type")
+    is_group: bool
