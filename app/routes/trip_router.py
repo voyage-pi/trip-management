@@ -174,16 +174,13 @@ async def get_trip(id: str):
     client = DBClient()
     try:
         result = await redis_client.get(str(id))
-        print("Redis result:", result)
         if result is not None:
-            print("itinerary from Redis:", result)
             # If from Redis, result is already a JSON string
             return ResponseBody({"itinerary": json.loads(result)})
 
         # Get from MongoDB
         result = client.get_trip_by_id(id)
         if result is not None:
-            print("itinerary from DB:", type(result))
             # Ensure Trip object is properly serialized
             if isinstance(result, Trip):
                 return ResponseBody({"itinerary": result.model_dump()})
@@ -223,6 +220,12 @@ async def update_trip(id: str, trip: Trip):
 @router.post("/trip/{trip_id}/regenerate-activity")
 async def regenerate_activity(trip_id: str, activity: dict):
     try:
+        # First get the current trip to preserve trip_type
+        current_trip = await redis_client.get(str(trip_id))
+        if current_trip:
+            current_trip_data = json.loads(current_trip)
+            trip_type = current_trip_data.get('trip_type')
+            
         recommendations_url = (
             f"http://recommendations:8080/trip/{trip_id}/regenerate-activity"
         )
@@ -235,16 +238,31 @@ async def regenerate_activity(trip_id: str, activity: dict):
                 status.HTTP_500_INTERNAL_SERVER_ERROR,
             )
 
+
         updated_itinerary = response.json()["response"]["itinerary"]
+        
+        # Preserve the trip_type in the updated itinerary
+        if current_trip and trip_type:
+            updated_itinerary['trip_type'] = trip_type
+            updated_itinerary['tripId'] = trip_id
+
+            
+        # Ensure other required fields are present
+        if 'country' in current_trip_data:
+            updated_itinerary['country'] = current_trip_data.get('country')
+        if 'city' in current_trip_data:
+            updated_itinerary['city'] = current_trip_data.get('city')
+        if 'is_group' in current_trip_data:
+            updated_itinerary['is_group'] = current_trip_data.get('is_group')
+            
         trip = Trip(**updated_itinerary)
+
 
         await redis_client.set(str(trip_id), json.dumps(trip.model_dump()), expire=3600)
 
-        return ResponseBody(
-            {"itinerary": updated_itinerary},
-            "Activity regenerated successfully",
-            status.HTTP_200_OK,
-        )
+        print("trip", trip)
+
+        return TripResponse(itinerary=trip, tripId=trip_id).model_dump()
 
     except Exception as e:
         print(f"Error regenerating activity: {str(e)}")
