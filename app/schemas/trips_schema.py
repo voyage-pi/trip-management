@@ -79,5 +79,6 @@ class TripSaveRequest(BaseModel):
     id: str
     itinerary: Trip | RoadItinerary
     trip_type: str
+    preferences_id:int
     is_group: bool
 

@@ -24,8 +24,7 @@ redis_client = RedisClient()
 
 # Mock trips data
 @router.post("/trips")
-async def trip_creation(forms: Form):
-    print(forms)
+async def trip_creation(forms: Form,rq:Request):
     try:
         # generate document Id for itinerary document and cache
         documentID = ObjectId()
@@ -33,12 +32,14 @@ async def trip_creation(forms: Form):
         display_name = forms.display_name
         country = forms.country
         city = forms.city
+        voyage_cookie = rq.cookies.get("voyage_at")
+        guest= True if voyage_cookie is None else False 
+        pref_name= forms.preferences.preferencesName if not guest else ""
         questionnaire = []
-        for user_id, user_questions in forms.questions.items():
-            for q in user_questions:
-                questionnaire.append(
-                    {"question_id": q.question_id, "value": q.value, "type": "scale"}
-                )
+        for q in forms.preferences.questions:
+            questionnaire.append(
+                {"question_id": q.question_id, "value": q.value, "type": "scale"}
+            )
         # Ensure duration is at least 1 day
         duration = max(1, forms.duration)
         delta = timedelta(days=duration)
@@ -101,6 +102,24 @@ async def trip_creation(forms: Form):
         await redis_client.set(
             str(documentID), json.dumps(current_trip["itinerary"]), expire=3600
         )
+        # create preferences
+        if not guest:
+            preferences={"name":pref_name,"answers":[{"answer":{"value":q["value"]},"question_id":q["question_id"]} for q in questionnaire]}
+            print(preferences)
+            response = request.post(
+                "http://user-management:8080/preferences", 
+                json=preferences,
+                timeout=10,
+                cookies={"voyage_at": voyage_cookie} if voyage_cookie else None,
+            )
+            if response.status_code != 200:
+                print(f"Error from user-management service: {response.text}")
+                return ResponseBody(
+                    {"error": response.text},
+                    "Error from recommendations service",
+                    status.HTTP_500_INTERNAL_SERVER_ERROR,
+                )
+            print(response)
         return ResponseBody(TripResponse(**current_trip).model_dump())
     except Exception as e:
         print(f"Error making request to recommendations service: {str(e)}")
