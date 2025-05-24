@@ -17,5 +17,7 @@ services:
       image: mongo
       restart: always
       volumes:
-        - ~/Desktop/Voyage/orchestrator/trip-management/mongo/data:/data/db
+        - mongo/data:/data/db
+volumes:
+  - mongo_data:
 
