@@ -33,8 +33,6 @@ async def trip_creation(forms: Form,rq:Request):
         country = forms.country
         city = forms.city
         voyage_cookie = rq.cookies.get("voyage_at")
-        guest= True if voyage_cookie is None else False 
-        pref_name= forms.preferences.preferencesName if not guest else ""
         questionnaire = []
         for q in forms.preferences.questions:
             questionnaire.append(
@@ -102,24 +100,25 @@ async def trip_creation(forms: Form,rq:Request):
         await redis_client.set(
             str(documentID), json.dumps(current_trip["itinerary"]), expire=3600
         )
-        # create preferences
-        if not guest:
-            preferences={"name":pref_name,"answers":[{"answer":{"value":q["value"]},"question_id":q["question_id"]} for q in questionnaire]}
-            print(preferences)
+        # save preferences if user is logged in
+        if voyage_cookie:
+            preferences={"name":forms.preferences.preferencesName,"answers":[{"answer":{"value":q["value"]},"question_id":q["question_id"]} for q in questionnaire]}
             response = request.post(
                 "http://user-management:8080/preferences", 
                 json=preferences,
                 timeout=10,
                 cookies={"voyage_at": voyage_cookie} if voyage_cookie else None,
             )
-            if response.status_code != 200:
+            if response.status_code != 200 and response.status_code != 409:
                 print(f"Error from user-management service: {response.text}")
                 return ResponseBody(
                     {"error": response.text},
-                    "Error from recommendations service",
+                    "User-management service error",
                     status.HTTP_500_INTERNAL_SERVER_ERROR,
                 )
-            print(response)
+            preferences_inserted_id=response.json()["response"]["id"]
+            current_trip["preferences_id"]=preferences_inserted_id
+
         return ResponseBody(TripResponse(**current_trip).model_dump())
     except Exception as e:
         print(f"Error making request to recommendations service: {str(e)}")
@@ -136,9 +135,7 @@ async def save_trip(trip: TripSaveRequest, rq: Request):
     try:
         already_exists = False
         try:
-            print(trip.id)
             existing_trip = client.get_trip_by_id(str(trip.id))
-            print("Existing trip:", existing_trip)
             if existing_trip is not None:
                 already_exists = True
                 print("Trip already exists in the database.")
@@ -161,7 +158,6 @@ async def save_trip(trip: TripSaveRequest, rq: Request):
 
             # Forward the cookie in the outgoing POST request
             if not already_exists:
-                print("Trip created")
                 user_trip_response = request.post(
                     f"http://user-management:8080/trips/save",
                     json={
