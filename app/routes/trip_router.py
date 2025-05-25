@@ -25,8 +25,7 @@ redis_client = RedisClient()
 
 # Mock trips data
 @router.post("/trips")
-async def trip_creation(forms: Form, rq: Request):
-    print(forms)
+async def trip_creation(forms: Form,rq:Request):
     try:
         # generate document Id for itinerary document and cache
         documentID = ObjectId()
@@ -34,12 +33,12 @@ async def trip_creation(forms: Form, rq: Request):
         display_name = forms.display_name
         country = forms.country
         city = forms.city
+        voyage_cookie = rq.cookies.get("voyage_at")
         questionnaire = []
-        for user_id, user_questions in forms.questions.items():
-            for q in user_questions:
-                questionnaire.append(
-                    {"question_id": q.question_id, "value": q.value, "type": "scale"}
-                )
+        for q in forms.preferences.questions:
+            questionnaire.append(
+                {"question_id": q.question_id, "value": q.value, "type": "scale"}
+            )
         # Ensure duration is at least 1 day
         duration = max(1, forms.duration)
         delta = timedelta(days=duration)
@@ -103,6 +102,24 @@ async def trip_creation(forms: Form, rq: Request):
         await redis_client.set(
             str(documentID), json.dumps(current_trip["itinerary"]), expire=3600
         )
+        # save preferences if user is logged in
+        if voyage_cookie:
+            preferences={"name":forms.preferences.preferencesName,"answers":[{"answer":{"value":q["value"]},"question_id":q["question_id"]} for q in questionnaire]}
+            response = request.post(
+                "http://user-management:8080/preferences", 
+                json=preferences,
+                timeout=10,
+                cookies={"voyage_at": voyage_cookie} if voyage_cookie else None,
+            )
+            if response.status_code != 200 and response.status_code != 409:
+                print(f"Error from user-management service: {response.text}")
+                return ResponseBody(
+                    {"error": response.text},
+                    "User-management service error",
+                    status.HTTP_500_INTERNAL_SERVER_ERROR,
+                )
+            preferences_inserted_id=response.json()["response"]["id"]
+            current_trip["preferences_id"]=preferences_inserted_id
 
         # Add the creator as a participant
         voyage_cookie = rq.cookies.get("voyage_at")
@@ -135,9 +152,7 @@ async def save_trip(trip: TripSaveRequest, rq: Request):
     try:
         already_exists = False
         try:
-            print(trip.id)
             existing_trip = client.get_trip_by_id(str(trip.id))
-            print("Existing trip:", existing_trip)
             if existing_trip is not None:
                 already_exists = True
                 print("Trip already exists in the database.")
@@ -160,7 +175,6 @@ async def save_trip(trip: TripSaveRequest, rq: Request):
 
             # Forward the cookie in the outgoing POST request
             if not already_exists:
-                print("Trip created")
                 user_trip_response = request.post(
                     f"http://user-management:8080/trips/save",
                     json={

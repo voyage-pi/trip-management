@@ -17,11 +17,6 @@ class Question(BaseModel):
     class Config:
         use_enum_values = True
 
-
-class UserQuestions(BaseModel):
-    questions: List[Question]
-
-
 class TripType(Enum):
     PLACE = "place"
     ROAD = "road"
@@ -49,11 +44,15 @@ class Zone(BaseModel):
     center: LatLong
     radius: int
 
+class Preferences(BaseModel):
+    questions:List[Question]
+    preferencesName:Optional[str] = None
+
 class Form(BaseModel):
     budget: float
     startDate: str
     duration: int = 3
-    questions: Dict[str, List[Question]]
+    preferences: Preferences
     must_visit_places: List[PlaceInfo] = []
     keywords: List[str] = []
     tripType: TripType
