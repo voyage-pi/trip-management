@@ -74,6 +74,7 @@ class RoadItinerary(BaseModel):
 class TripResponse(BaseModel):
     itinerary: Trip | RoadItinerary
     tripId: str
+    preferences_id:Optional[int]=None
 
 class TripSaveRequest(BaseModel):
     id: str
