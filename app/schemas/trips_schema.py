@@ -6,6 +6,10 @@ class LatLong(BaseModel):
     latitude: float
     longitude: float
 
+class PriceRange(BaseModel):
+    start_price:float
+    end_price:float
+    currency:str
 
 class PlaceInfo(BaseModel):
     id: Optional[str] = None
@@ -15,7 +19,8 @@ class PlaceInfo(BaseModel):
     photos: Optional[List] = None
     accessibility_options: Optional[Dict] = None
     opening_hours: Optional[Dict] = None
-    price_range: Optional[str] = None
+    price_range: Optional[PriceRange] = None
+    price_level: Optional[str] = None
     rating: Optional[float] = None
     user_ratings_total: Optional[int] = None
     international_phone_number: Optional[str] = None
@@ -47,13 +52,15 @@ class Day(BaseModel):
 
 
 class Trip(BaseModel):
-    start_date: datetime | str
+    price_range:Optional[PriceRange] = None
+    start_date: datetime | str  = None
     end_date: datetime | str
     days: List[Day] = []
     name: str
     trip_type: Optional[str]
     country: str | None = None
     city: str | None = None
+    prince_range: Optional[PriceRange] = None
     is_group: bool
 
 class Stop(BaseModel):

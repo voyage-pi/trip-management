@@ -90,6 +90,7 @@ async def trip_creation(forms: Form,rq:Request):
                 status.HTTP_500_INTERNAL_SERVER_ERROR,
             )
         itinerary = response.json()["itinerary"]
+        print(response.json())
         itinerary["trip_type"]=trip_type.value
         itinerary["country"]=country
         itinerary["city"]=city
