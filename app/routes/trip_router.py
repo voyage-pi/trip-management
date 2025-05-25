@@ -17,6 +17,7 @@ router = APIRouter(
     responses={404: {"description": "Trips not found"}},
 )
 
+USER_MANAGEMENT_URL = "http://user-management:8080"
 
 # create global redis instance
 redis_client = RedisClient()
@@ -24,7 +25,7 @@ redis_client = RedisClient()
 
 # Mock trips data
 @router.post("/trips")
-async def trip_creation(forms: Form):
+async def trip_creation(forms: Form, rq: Request):
     print(forms)
     try:
         # generate document Id for itinerary document and cache
@@ -102,6 +103,22 @@ async def trip_creation(forms: Form):
         await redis_client.set(
             str(documentID), json.dumps(current_trip["itinerary"]), expire=3600
         )
+
+        # Add the creator as a participant
+        voyage_cookie = rq.cookies.get("voyage_at")
+        if voyage_cookie:
+            user_trip_response = request.post(
+                f"{USER_MANAGEMENT_URL}/trips/save",
+                json={
+                    "trip_id": str(documentID),
+                    "is_group": bool(forms.is_group)
+                },
+                cookies={"voyage_at": voyage_cookie},
+                timeout=10,
+            )
+            if user_trip_response.status_code != 200:
+                print(f"Failed to add creator as participant: {user_trip_response.text}")
+
         return ResponseBody(TripResponse(**current_trip).model_dump())
     except Exception as e:
         print(f"Error making request to recommendations service: {str(e)}")
@@ -171,26 +188,103 @@ async def save_trip(trip: TripSaveRequest, rq: Request):
 
 
 @router.get("/trips/{id}")
-async def get_trip(id: str):
+async def get_trip(id: str, rq: Request):
     client = DBClient()
     try:
         result = await redis_client.get(str(id))
         if result is not None:
-            # If from Redis, result is already a JSON string
-            return ResponseBody({"itinerary": json.loads(result)})
+            trip_data = json.loads(result)
+            voyage_cookie = rq.cookies.get("voyage_at")
+            
+            # Get participants data based on authentication status
+            participants = []
+            if voyage_cookie:
+                # Authenticated user - get full participant details
+                try:
+                    participants_response = request.get(
+                        f"{USER_MANAGEMENT_URL}/trips/participants/{id}",
+                        cookies={"voyage_at": voyage_cookie},
+                        timeout=10
+                    )
+                    print(participants_response)
+                    if participants_response.status_code == 200:
+                        participants = participants_response.json()
+                        print(participants)
+                    else:
+                        print(f"Failed to get participants: {participants_response.status_code}")
+                        participants = []
+                except Exception as e:
+                    print(f"Error fetching participants: {str(e)}")
+                    participants = []
+            else:
+                # Guest user - check if trip has participants without getting details
+                try:
+                    count_response = request.get(
+                        f"{USER_MANAGEMENT_URL}/trips/participants-count/{id}",
+                        timeout=10
+                    )
+                    if count_response.status_code == 200:
+                        count_data = count_response.json()
+                        if count_data.get("has_participants", False):
+                            # Return a placeholder to indicate there are participants but we can't see them
+                            participants = [{"user_id": "hidden"}]  # Placeholder to indicate participants exist
+                        else:
+                            participants = []  # No participants - guest can edit
+                    else:
+                        print(f"Failed to get participant count: {count_response.status_code}")
+                        participants = []
+                except Exception as e:
+                    print(f"Error fetching participant count: {str(e)}")
+                    participants = []
+            
+            print("--------------------------------")
+            return ResponseBody({"itinerary": trip_data, "participants": participants})
 
-        # Get from MongoDB
         result = client.get_trip_by_id(id)
         if result is not None:
-            # Ensure Trip object is properly serialized
-            if isinstance(result, Trip):
-                return ResponseBody({"itinerary": result.model_dump()})
-            # If string, parse it
-            elif isinstance(result, str):
-                return ResponseBody({"itinerary": json.loads(result)})
-            # If already a dict, use it directly
+            trip_data = result.model_dump() if isinstance(result, Trip) else json.loads(result) if isinstance(result, str) else result.model_dump()
+            voyage_cookie = rq.cookies.get("voyage_at")
+            
+            # Get participants data based on authentication status
+            participants = []
+            if voyage_cookie:
+                # Authenticated user - get full participant details
+                try:
+                    participants_response = request.get(
+                        f"{USER_MANAGEMENT_URL}/trips/participants/{id}",
+                        cookies={"voyage_at": voyage_cookie},
+                        timeout=10
+                    )
+                    if participants_response.status_code == 200:
+                        participants = participants_response.json()
+                    else:
+                        print(f"Failed to get participants: {participants_response.status_code}")
+                        participants = []
+                except Exception as e:
+                    print(f"Error fetching participants: {str(e)}")
+                    participants = []
             else:
-                return ResponseBody({"itinerary": result.model_dump()})
+                # Guest user - check if trip has participants without getting details
+                try:
+                    count_response = request.get(
+                        f"{USER_MANAGEMENT_URL}/trips/participants-count/{id}",
+                        timeout=10
+                    )
+                    if count_response.status_code == 200:
+                        count_data = count_response.json()
+                        if count_data.get("has_participants", False):
+                            # Return a placeholder to indicate there are participants but we can't see them
+                            participants = [{"user_id": "hidden"}]  # Placeholder to indicate participants exist
+                        else:
+                            participants = []  # No participants - guest can edit
+                    else:
+                        print(f"Failed to get participant count: {count_response.status_code}")
+                        participants = []
+                except Exception as e:
+                    print(f"Error fetching participant count: {str(e)}")
+                    participants = []
+                
+            return ResponseBody({"itinerary": trip_data, "participants": participants})
 
         return ResponseBody({}, "No trip found for this id.", status.HTTP_404_NOT_FOUND)
     except Exception as e:
