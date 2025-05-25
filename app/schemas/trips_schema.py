@@ -52,7 +52,6 @@ class Day(BaseModel):
 
 
 class Trip(BaseModel):
-    price_range:Optional[PriceRange] = None
     start_date: datetime | str  = None
     end_date: datetime | str
     days: List[Day] = []
