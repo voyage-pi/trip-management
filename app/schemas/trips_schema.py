@@ -20,7 +20,7 @@ class PlaceInfo(BaseModel):
     accessibility_options: Optional[Dict] = None
     opening_hours: Optional[Dict] = None
     price_range: Optional[PriceRange] = None
-    price_level:Optional[str] = None
+    price_level: Optional[str] = None
     rating: Optional[float] = None
     user_ratings_total: Optional[int] = None
     international_phone_number: Optional[str] = None
@@ -60,6 +60,7 @@ class Trip(BaseModel):
     trip_type: Optional[str]
     country: str | None = None
     city: str | None = None
+    prince_range: Optional[PriceRange] = None
     is_group: bool
 
 class Stop(BaseModel):
