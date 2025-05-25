@@ -198,6 +198,7 @@ async def websocket_trip_creation(websocket: WebSocket):
         # save preferences if user is logged in
         if voyage_cookie:
             preferences={"name":forms.preferences.preferencesName,"answers":[{"answer":{"value":q["value"]},"question_id":q["question_id"]} for q in questionnaire]}
+
             response = request.post(
                 "http://user-management:8080/preferences", 
                 json=preferences,
@@ -206,11 +207,10 @@ async def websocket_trip_creation(websocket: WebSocket):
             )
             if response.status_code != 200 and response.status_code != 409:
                 print(f"Error from user-management service: {response.text}")
-                return ResponseBody(
-                    {"error": response.text},
-                    "User-management service error",
-                    status.HTTP_500_INTERNAL_SERVER_ERROR,
-                )
+                await websocket.send_json({
+                    "type": "error",
+                    "message": "Couldn't save the preferences of the user for this trip.",
+                })
             preferences_inserted_id=response.json()["response"]["id"]
             current_trip["preferences_id"]=preferences_inserted_id
             
@@ -227,8 +227,16 @@ async def websocket_trip_creation(websocket: WebSocket):
                 )
                 if user_trip_response.status_code != 200:
                     print(f"Failed to add creator as participant: {user_trip_response.text}")
+                    await websocket.send_json({
+                        "type": "error",
+                        "message": user_trip_response.text,
+                    })
             except Exception as e:
                 print(f"Error adding creator as participant: {str(e)}")
+                await websocket.send_json({
+                    "type": "error",
+                    "message": str(e),
+                })
         
         await websocket.send_json({
             "type": "success",
