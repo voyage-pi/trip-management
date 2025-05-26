@@ -103,33 +103,47 @@ async def trip_creation(forms: Form,rq:Request):
             str(documentID), json.dumps(current_trip["itinerary"]), expire=3600
         )
         # save preferences if user is logged in
+        preference_id = None
         if voyage_cookie:
-            preferences={"name":forms.preferences.preferencesName,"answers":[{"answer":{"value":q["value"]},"question_id":q["question_id"]} for q in questionnaire]}
-            response = request.post(
-                "http://user-management:8080/preferences", 
-                json=preferences,
-                timeout=10,
-                cookies={"voyage_at": voyage_cookie} if voyage_cookie else None,
-            )
-            if response.status_code != 200 and response.status_code != 409:
-                print(f"Error from user-management service: {response.text}")
-                return ResponseBody(
-                    {"error": response.text},
-                    "User-management service error",
-                    status.HTTP_500_INTERNAL_SERVER_ERROR,
+            # Check if an existing preference_id was provided (for reused preferences)
+            if hasattr(forms, 'preference_id') and forms.preference_id:
+                preference_id = forms.preference_id
+                current_trip["preference_id"] = preference_id
+                print(f"Using existing preference ID: {preference_id}")
+            else:
+                # Create new preferences
+                preferences={"name":forms.preferences.preferencesName,"answers":[{"answer":{"value":q["value"]},"question_id":q["question_id"]} for q in questionnaire]}
+                response = request.post(
+                    "http://user-management:8080/preferences", 
+                    json=preferences,
+                    timeout=10,
+                    cookies={"voyage_at": voyage_cookie} if voyage_cookie else None,
                 )
-            preferences_inserted_id=response.json()["response"]["id"]
-            current_trip["preferences_id"]=preferences_inserted_id
+                if response.status_code != 200 and response.status_code != 409:
+                    print(f"Error from user-management service: {response.text}")
+                    return ResponseBody(
+                        {"error": response.text},
+                        "User-management service error",
+                        status.HTTP_500_INTERNAL_SERVER_ERROR,
+                    )
+                preference_id = response.json()["response"]["id"]
+                current_trip["preference_id"] = preference_id
+                print(f"Created new preference ID: {preference_id}")
 
         # Add the creator as a participant
         voyage_cookie = rq.cookies.get("voyage_at")
         if voyage_cookie:
+            user_trip_data = {
+                "trip_id": str(documentID),
+                "is_group": bool(forms.is_group)
+            }
+            # Add preference_id if it exists
+            if preference_id:
+                user_trip_data["preference_id"] = preference_id
+                
             user_trip_response = request.post(
                 f"{USER_MANAGEMENT_URL}/trips/save",
-                json={
-                    "trip_id": str(documentID),
-                    "is_group": bool(forms.is_group)
-                },
+                json=user_trip_data,
                 cookies={"voyage_at": voyage_cookie},
                 timeout=10,
             )
@@ -175,12 +189,17 @@ async def save_trip(trip: TripSaveRequest, rq: Request):
 
             # Forward the cookie in the outgoing POST request
             if not already_exists:
+                user_trip_data = {
+                    "trip_id": str(trip.id),
+                    "is_group": bool(trip.is_group)
+                }
+                # Add preference_id if it exists
+                if trip.preference_id is not None:
+                    user_trip_data["preference_id"] = trip.preference_id
+                    
                 user_trip_response = request.post(
                     f"http://user-management:8080/trips/save",
-                    json={
-                        "trip_id": str(trip.id),
-                        "is_group": bool(trip.is_group)
-                            },
+                    json=user_trip_data,
                     cookies={"voyage_at": voyage_cookie} if voyage_cookie else None,
                     timeout=10,
                 )

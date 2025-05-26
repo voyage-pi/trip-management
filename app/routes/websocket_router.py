@@ -196,32 +196,46 @@ async def websocket_trip_creation(websocket: WebSocket):
             voyage_cookie = cookies.get('voyage_at')
         
         # save preferences if user is logged in
-        if not guest:
-            preferences={"name":forms.preferences.preferencesName,"answers":[{"answer":{"value":q["value"]},"question_id":q["question_id"]} for q in questionnaire]}
+        preference_id = None
+        if voyage_cookie:
+            # Check if an existing preference_id was provided (for reused preferences)
+            if hasattr(forms, 'preference_id') and forms.preference_id:
+                preference_id = forms.preference_id
+                current_trip["preference_id"] = preference_id
+                print(f"Using existing preference ID: {preference_id}")
+            else:
+                # Create new preferences
+                preferences={"name":forms.preferences.preferencesName,"answers":[{"answer":{"value":q["value"]},"question_id":q["question_id"]} for q in questionnaire]}
 
-            response = request.post(
-                "http://user-management:8080/preferences", 
-                json=preferences,
-                timeout=10,
-                cookies={"voyage_at": voyage_cookie} if voyage_cookie else None,
-            )
-            if response.status_code != 200 and response.status_code != 409:
-                print(f"Error from user-management service: {response.text}")
-                await websocket.send_json({
-                    "type": "error",
-                    "message": "Couldn't save the preferences of the user for this trip.",
-                })
-            preferences_inserted_id=response.json()["response"]["id"]
-            current_trip["preferences_id"]=preferences_inserted_id
+                response = request.post(
+                    "http://user-management:8080/preferences", 
+                    json=preferences,
+                    timeout=10,
+                    cookies={"voyage_at": voyage_cookie} if voyage_cookie else None,
+                )
+                if response.status_code != 200 and response.status_code != 409:
+                    print(f"Error from user-management service: {response.text}")
+                    await websocket.send_json({
+                        "type": "error",
+                        "message": "Couldn't save the preferences of the user for this trip.",
+                    })
+                preference_id = response.json()["response"]["id"]
+                current_trip["preference_id"] = preference_id
+                print(f"Created new preference ID: {preference_id}")
             
         if voyage_cookie and not guest:
             try:
+                user_trip_data = {
+                    "trip_id": trip_id,
+                    "is_group": bool(forms.is_group)
+                }
+                # Add preference_id if it exists
+                if preference_id:
+                    user_trip_data["preference_id"] = preference_id
+                    
                 user_trip_response = request.post(
                     f"{USER_MANAGEMENT_URL}/trips/save",
-                    json={
-                        "trip_id": trip_id,
-                        "is_group": bool(forms.is_group)
-                    },
+                    json=user_trip_data,
                     cookies={"voyage_at": voyage_cookie},
                     timeout=10,
                 )
