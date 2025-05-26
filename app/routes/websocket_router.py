@@ -58,7 +58,7 @@ async def websocket_trip_creation(websocket: WebSocket):
         })
         
         form_data = await websocket.receive_json()
-        
+        guest= True if "guest" in form_data else False
         try:
             forms = Form(**form_data)
         except ValidationError as e:
@@ -196,7 +196,7 @@ async def websocket_trip_creation(websocket: WebSocket):
             voyage_cookie = cookies.get('voyage_at')
         
         # save preferences if user is logged in
-        if voyage_cookie:
+        if not guest:
             preferences={"name":forms.preferences.preferencesName,"answers":[{"answer":{"value":q["value"]},"question_id":q["question_id"]} for q in questionnaire]}
 
             response = request.post(
