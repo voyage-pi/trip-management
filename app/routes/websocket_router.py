@@ -214,7 +214,7 @@ async def websocket_trip_creation(websocket: WebSocket):
             preferences_inserted_id=response.json()["response"]["id"]
             current_trip["preferences_id"]=preferences_inserted_id
             
-        if voyage_cookie:
+        if voyage_cookie and not guest:
             try:
                 user_trip_response = request.post(
                     f"{USER_MANAGEMENT_URL}/trips/save",
