@@ -299,11 +299,7 @@ async def get_trip(id: str, rq: Request):
 
         result = client.get_trip_by_id(id)
         if result is not None:
-<<<<<<< HEAD
             trip_data = result.model_dump() if isinstance(result, (Trip, RoadItinerary)) else json.loads(result) if isinstance(result, str) else result.model_dump()
-=======
-            trip_data =  json.loads(result) if isinstance(result, str) else result.model_dump()
->>>>>>> 8e8a546b63723839f394fa2f8b47c9a9293cc2e6
             voyage_cookie = rq.cookies.get("voyage_at")
             
             # Get participants data based on authentication status

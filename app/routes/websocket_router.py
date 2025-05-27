@@ -243,6 +243,7 @@ async def websocket_trip_creation(websocket: WebSocket):
                         "type": "error",
                         "message": "Couldn't save the preferences of the user for this trip.",
                     })
+                    return
                 preference_id = response.json()["response"]["id"]
                 current_trip["preference_id"] = preference_id
                 print(f"Created new preference ID: {preference_id}")
