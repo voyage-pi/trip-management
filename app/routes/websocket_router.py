@@ -177,12 +177,12 @@ async def websocket_trip_creation(websocket: WebSocket):
             }
         elif trip_type.value == "road":
             itinerary["origin_coordinates"] = {
-                "latitude": forms.data_type.origin.coordinates.latitude,
-                "longitude": forms.data_type.origin.coordinates.longitude
+                "latitude": forms.data_type.origin.location.latitude,
+                "longitude": forms.data_type.origin.location.longitude
             }
             itinerary["destination_coordinates"] = {
-                "latitude": forms.data_type.destination.coordinates.latitude,
-                "longitude": forms.data_type.destination.coordinates.longitude
+                "latitude": forms.data_type.destination.location.latitude,
+                "longitude": forms.data_type.destination.location.longitude
             }
         
         current_trip = dict()
@@ -349,7 +349,7 @@ async def websocket_trip_regeneration(websocket: WebSocket, trip_id: str):
         if not current_trip:
             db_trip = client.get_trip_by_id(trip_id)
             if db_trip is not None:
-                if isinstance(db_trip, Trip):
+                if isinstance(db_trip, (Trip, RoadItinerary)):
                     current_trip = json.dumps(db_trip.model_dump())
                 elif isinstance(db_trip, str):
                     current_trip = db_trip

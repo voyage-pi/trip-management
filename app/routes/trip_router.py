@@ -8,7 +8,7 @@ import requests as request
 import json
 from pydantic import ValidationError
 from bson import ObjectId
-from typing import List
+from typing import List, Union
 from datetime import datetime, timedelta
 
 router = APIRouter(
@@ -111,12 +111,12 @@ async def trip_creation(forms: Form,rq:Request):
             }
         elif trip_type.value == "road":
             itinerary["origin_coordinates"] = {
-                "latitude": forms.data_type.origin.coordinates.latitude,
-                "longitude": forms.data_type.origin.coordinates.longitude
+                "latitude": forms.data_type.origin.location.latitude,
+                "longitude": forms.data_type.origin.location.longitude
             }
             itinerary["destination_coordinates"] = {
-                "latitude": forms.data_type.destination.coordinates.latitude,
-                "longitude": forms.data_type.destination.coordinates.longitude
+                "latitude": forms.data_type.destination.location.latitude,
+                "longitude": forms.data_type.destination.location.longitude
             }
         
         # casting the dictionary to Trip BaseModel object
@@ -300,7 +300,7 @@ async def get_trip(id: str, rq: Request):
 
         result = client.get_trip_by_id(id)
         if result is not None:
-            trip_data = result.model_dump() if isinstance(result, Trip) else json.loads(result) if isinstance(result, str) else result.model_dump()
+            trip_data = result.model_dump() if isinstance(result, (Trip, RoadItinerary)) else json.loads(result) if isinstance(result, str) else result.model_dump()
             voyage_cookie = rq.cookies.get("voyage_at")
             
             # Get participants data based on authentication status
@@ -355,7 +355,7 @@ async def get_trip(id: str, rq: Request):
 
 
 @router.put("/trip/{id}")
-async def update_trip(id: str, trip: Trip):
+async def update_trip(id: str, trip: Union[Trip, RoadItinerary]):
     client = DBClient()
     try:
         if client.put_trip_by_doc_id(id, trip):
@@ -408,8 +408,11 @@ async def regenerate_activity(trip_id: str, activity: dict):
         if 'is_group' in current_trip_data:
             updated_itinerary['is_group'] = current_trip_data.get('is_group')
             
-        trip = Trip(**updated_itinerary)
-
+        # Create the appropriate trip object based on trip_type
+        if trip_type == "road":
+            trip = RoadItinerary(**updated_itinerary)
+        else:
+            trip = Trip(**updated_itinerary)
 
         await redis_client.set(str(trip_id), json.dumps(trip.model_dump()), expire=3600)
 
@@ -454,7 +457,12 @@ async def delete_activity(trip_id: str, activity_id: str):
         # Preserve the trip_type in the updated itinerary
         if trip_type:
             updated_itinerary['trip_type'] = trip_type
-        trip = Trip(**updated_itinerary)
+        
+        # Create the appropriate trip object based on trip_type
+        if trip_type == "road":
+            trip = RoadItinerary(**updated_itinerary)
+        else:
+            trip = Trip(**updated_itinerary)
 
         # Update in Redis cache
         await redis_client.set(str(trip_id), json.dumps(trip.model_dump()), expire=3600)
@@ -496,7 +504,7 @@ async def update_trip_preferences(trip_id: str, preferences_data: dict, rq: Requ
             db_trip = client.get_trip_by_id(trip_id)
             if db_trip is not None:
                 print(f"Trip {trip_id} found in database")
-                if isinstance(db_trip, Trip):
+                if isinstance(db_trip, (Trip, RoadItinerary)):
                     current_trip = json.dumps(db_trip.model_dump())
                 elif isinstance(db_trip, str):
                     current_trip = db_trip
