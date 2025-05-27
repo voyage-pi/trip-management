@@ -121,11 +121,6 @@ class DBClient:
             return result.modified_count > 0
         except Exception as e:
             return f"Error deleting place from trip: {e}"
-        result = self.collection.update_one(
-            {"_id": ObjectId(trip_id)},
-            {"$pull": {"days.$[].places": {"placeId": place_id}}},
-        )
-        return result.modified_count > 0
 
     def get_all_trips(self):
         result = list(self.collection.find({}))
