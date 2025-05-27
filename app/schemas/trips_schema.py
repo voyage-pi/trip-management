@@ -61,6 +61,12 @@ class Trip(BaseModel):
     city: str | None = None
     prince_range: Optional[PriceRange] = None
     is_group: bool
+    # Original location data for regeneration
+    original_place_data: Optional[Dict] = None  # Store the original place/zone/road data
+    center_coordinates: Optional[LatLong] = None  # For zone trips
+    place_coordinates: Optional[LatLong] = None   # For place trips
+    origin_coordinates: Optional[LatLong] = None  # For road trips
+    destination_coordinates: Optional[LatLong] = None  # For road trips
 
 class Stop(BaseModel):
     place: PlaceInfo
@@ -76,15 +82,20 @@ class RoadItinerary(BaseModel):
     country: str | None = None
     city: str | None = None
     is_group: bool
+    # Original location data for regeneration
+    original_place_data: Optional[Dict] = None  # Store the original road data
+    origin_coordinates: Optional[LatLong] = None
+    destination_coordinates: Optional[LatLong] = None
 
 class TripResponse(BaseModel):
     itinerary: Trip | RoadItinerary
     tripId: str
-    preferences_id:Optional[int]=None
+    preference_id:Optional[int]=None
 
 class TripSaveRequest(BaseModel):
     id: str
     itinerary: Trip | RoadItinerary
     trip_type: str
     is_group: bool
+    preference_id: Optional[int] = None
 
