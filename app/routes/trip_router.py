@@ -448,3 +448,186 @@ async def delete_activity(trip_id: str, activity_id: str):
             "Error deleting activity",
             status.HTTP_500_INTERNAL_SERVER_ERROR,
         )
+
+@router.put("/trip/{trip_id}/preferences")
+async def update_trip_preferences(trip_id: str, preferences_data: dict, rq: Request):
+    """Update trip preferences and regenerate the trip with new preferences"""
+    client = DBClient()
+    try:
+        voyage_cookie = rq.cookies.get("voyage_at")
+        if not voyage_cookie:
+            return ResponseBody(
+                {"error": "Authentication required"},
+                "Authentication required",
+                status.HTTP_401_UNAUTHORIZED,
+            )
+
+        # First try to get trip from Redis
+        current_trip = await redis_client.get(str(trip_id))
+        
+        # If not in Redis, try to get from database
+        if not current_trip:
+            print(f"Trip {trip_id} not found in Redis, checking database...")
+            db_trip = client.get_trip_by_id(trip_id)
+            if db_trip is not None:
+                print(f"Trip {trip_id} found in database")
+                if isinstance(db_trip, Trip):
+                    current_trip = json.dumps(db_trip.model_dump())
+                elif isinstance(db_trip, str):
+                    current_trip = db_trip
+                else:
+                    current_trip = json.dumps(db_trip.model_dump())
+                
+                # Cache the trip in Redis for future requests
+                await redis_client.set(str(trip_id), current_trip, expire=3600)
+            else:
+                print(f"Trip {trip_id} not found in database either")
+                return ResponseBody(
+                    {"error": "Trip not found"},
+                    "Trip not found",
+                    status.HTTP_404_NOT_FOUND,
+                )
+        else:
+            print(f"Trip {trip_id} found in Redis")
+        
+        current_trip_data = json.loads(current_trip)
+        
+        # Get the preference_id from the request
+        preference_id = preferences_data.get("preference_id")
+        answers = preferences_data.get("answers", [])
+        
+        if not preference_id:
+            return ResponseBody(
+                {"error": "Preference ID is required"},
+                "Preference ID is required",
+                status.HTTP_400_BAD_REQUEST,
+            )
+
+        # Update preferences in user-management service
+        preferences_payload = {
+            "name": "Updated Trip Preferences",  # You might want to get this from the request
+            "answers": [{"question_id": answer["question_id"], "answer": {"value": answer["value"]}} for answer in answers]
+        }
+        
+        preferences_response = request.put(
+            f"{USER_MANAGEMENT_URL}/preferences/{preference_id}",
+            json=preferences_payload,
+            cookies={"voyage_at": voyage_cookie},
+            timeout=10,
+        )
+        
+        if preferences_response.status_code != 200:
+            return ResponseBody(
+                {"error": f"Failed to update preferences: {preferences_response.text}"},
+                "Failed to update preferences",
+                status.HTTP_500_INTERNAL_SERVER_ERROR,
+            )
+
+        # Prepare questionnaire for recommendations service
+        questionnaire = [{"question_id": answer["question_id"], "value": answer["value"], "type": "scale"} for answer in answers]
+        
+        # Get trip metadata from current trip or cache
+        trip_type = current_trip_data.get('trip_type', 'place')
+        country = current_trip_data.get('country')
+        city = current_trip_data.get('city')
+        is_group = current_trip_data.get('is_group', False)
+        
+        # For regeneration, we need to get the original trip parameters
+        # This might be stored in a separate cache or we need to reconstruct from current data
+        
+        # Prepare request body for recommendations service (similar to trip creation)
+        requestBody = {
+            "trip_id": trip_id,
+            "questionnaire": questionnaire,
+            # We need to get these from the original trip or current trip data
+            "start_date": current_trip_data.get('start_date', datetime.now().isoformat()),
+            "end_date": current_trip_data.get('end_date', (datetime.now() + timedelta(days=3)).isoformat()),
+            "budget": current_trip_data.get('budget', 1000),
+            "name": current_trip_data.get('name', 'Updated Trip'),
+            "must_visit_places": current_trip_data.get('must_visit_places', []),
+            "keywords": current_trip_data.get('keywords', []),
+            "country": country,
+            "city": city,
+            "is_group": is_group,
+        }
+        
+        # Add data type and trip type
+        requestBody["data"] = current_trip_data.get('data', {"template_type": "moderate"})
+        requestBody["tripType"] = trip_type
+        
+        print(f"Calling recommendations service with data: {json.dumps(requestBody)[:200]}...")
+        
+        # Call recommendations service to regenerate trip
+        response = request.post(
+            "http://recommendations:8080/trip", 
+            json=requestBody, 
+            timeout=60
+        )
+        
+        if response.status_code != 200:
+            return ResponseBody(
+                {"error": f"Error from recommendations service: {response.text}"},
+                "Error regenerating trip",
+                status.HTTP_500_INTERNAL_SERVER_ERROR,
+            )
+        
+        # Process the new itinerary
+        itinerary = response.json()["itinerary"]
+        itinerary["trip_type"] = trip_type
+        itinerary["country"] = country
+        itinerary["city"] = city
+        
+        # Update the trip in cache
+        updated_trip = RoadItinerary(**itinerary).model_dump() if trip_type == "road" else Trip(**itinerary).model_dump()
+        await redis_client.set(trip_id, json.dumps(updated_trip), expire=3600)
+        
+        # Also update the trip in the database
+        try:
+            if trip_type == "road":
+                db_updated = client.put_trip_by_doc_id(trip_id, RoadItinerary(**itinerary))
+            else:
+                db_updated = client.put_trip_by_doc_id(trip_id, Trip(**itinerary))
+            print(f"Database update result: {db_updated}")
+        except Exception as db_error:
+            print(f"Error updating trip in database: {str(db_error)}")
+            # Continue even if database update fails, since Redis has the updated trip
+        
+        # Return the updated trip
+        return ResponseBody({
+            "response": {
+                "itinerary": updated_trip,
+                "tripId": trip_id,
+                "preference_id": preference_id
+            }
+        })
+
+    except Exception as e:
+        print(f"Error updating trip preferences: {str(e)}")
+        import traceback
+        traceback.print_exc()
+        return ResponseBody(
+            {"error": str(e)},
+            "Error updating trip preferences",
+            status.HTTP_500_INTERNAL_SERVER_ERROR,
+        )
+
+@router.get("/trip-test-auth")
+async def test_auth(rq: Request):
+    """Test endpoint to debug authentication issues"""
+    try:
+        voyage_cookie = rq.cookies.get("voyage_at")
+        headers_dict = dict(rq.headers)
+        
+        return ResponseBody({
+            "has_cookie": voyage_cookie is not None,
+            "cookie_prefix": voyage_cookie[:10] if voyage_cookie else None,
+            "headers": headers_dict,
+            "message": "This is a test endpoint"
+        })
+    except Exception as e:
+        print(f"Error in test auth endpoint: {str(e)}")
+        return ResponseBody(
+            {"error": str(e)},
+            "Error in test endpoint",
+            status.HTTP_500_INTERNAL_SERVER_ERROR,
+        )
