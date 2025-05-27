@@ -277,3 +277,304 @@ async def websocket_trip_creation(websocket: WebSocket):
             pass
         if trip_id:
             manager.disconnect(trip_id) 
+
+@router.websocket("/trip-regeneration/{trip_id}")
+async def websocket_trip_regeneration(websocket: WebSocket, trip_id: str):
+    """Handle trip regeneration via WebSocket for preference updates"""
+    try:
+        await websocket.accept()
+        
+        await websocket.send_json({
+            "type": "connection",
+            "message": "Connected to trip regeneration service",
+            "progress": 0,
+            "trip_id": trip_id
+        })
+        
+        # Wait for preferences data
+        preferences_data = await websocket.receive_json()
+        
+        await websocket.send_json({
+            "type": "progress",
+            "message": "Validating preferences data...",
+            "progress": 10
+        })
+        
+        # Extract data from the message
+        preference_id = preferences_data.get("preference_id")
+        answers = preferences_data.get("answers", [])
+        
+        if not preference_id:
+            await websocket.send_json({
+                "type": "error",
+                "message": "Preference ID is required",
+                "progress": 10
+            })
+            return
+        
+        await websocket.send_json({
+            "type": "progress", 
+            "message": "Loading trip data...",
+            "progress": 20
+        })
+        
+        # Get trip data (from Redis or database)
+        client = DBClient()
+        current_trip = await redis_client.get(str(trip_id))
+        
+        if not current_trip:
+            db_trip = client.get_trip_by_id(trip_id)
+            if db_trip is not None:
+                if isinstance(db_trip, Trip):
+                    current_trip = json.dumps(db_trip.model_dump())
+                elif isinstance(db_trip, str):
+                    current_trip = db_trip
+                else:
+                    current_trip = json.dumps(db_trip.model_dump())
+                await redis_client.set(str(trip_id), current_trip, expire=3600)
+            else:
+                await websocket.send_json({
+                    "type": "error",
+                    "message": "Trip not found",
+                    "progress": 20
+                })
+                return
+        
+        current_trip_data = json.loads(current_trip)
+        
+        print(f"DEBUG: Current trip data keys: {list(current_trip_data.keys())}")
+        print(f"DEBUG: Current trip data: {json.dumps(current_trip_data, indent=2)[:1000]}...")
+        
+        await websocket.send_json({
+            "type": "progress",
+            "message": "Preparing regeneration request...",
+            "progress": 30
+        })
+        
+        # Prepare questionnaire for recommendations service
+        questionnaire = [{"question_id": answer["question_id"], "value": answer["value"], "type": "scale"} for answer in answers]
+        
+        # Get trip metadata
+        trip_type = current_trip_data.get('trip_type', 'place')
+        country = current_trip_data.get('country')
+        city = current_trip_data.get('city')
+        is_group = current_trip_data.get('is_group', False)
+        
+        # Function to extract location from trip activities
+        def extract_location_from_activities(trip_data):
+            """Extract location coordinates from existing trip activities"""
+            try:
+                days = trip_data.get('days', [])
+                if not days:
+                    return None
+                
+                # Look through all activities to find location data
+                for day in days:
+                    for activity_type in ['morning_activities', 'afternoon_activities', 'evening_activities']:
+                        activities = day.get(activity_type, [])
+                        for activity in activities:
+                            place = activity.get('place', {})
+                            location = place.get('location', {})
+                            if location.get('latitude') and location.get('longitude'):
+                                return {
+                                    'latitude': location['latitude'],
+                                    'longitude': location['longitude'],
+                                    'place_name': place.get('name', city or country or 'Unknown Place'),
+                                    'place_id': place.get('id')
+                                }
+                return None
+            except Exception as e:
+                print(f"Error extracting location from activities: {e}")
+                return None
+        
+        # Reconstruct the data field based on trip type
+        data_field = current_trip_data.get('data')
+        if not data_field or (isinstance(data_field, dict) and data_field.get('template_type')):
+            print(f"DEBUG: Reconstructing data field for trip_type: {trip_type}")
+            
+            # Extract location from existing activities
+            location_info = extract_location_from_activities(current_trip_data)
+            print(f"DEBUG: Extracted location info: {location_info}")
+            
+            if trip_type == "zone":
+                if location_info:
+                    center_lat = location_info['latitude']
+                    center_lng = location_info['longitude']
+                    radius = current_trip_data.get('radius', 50)  # Default 50km radius
+                else:
+                    # Fallback to hardcoded defaults
+                    center_lat = 40.7128  # NYC
+                    center_lng = -74.0060
+                    radius = 50
+                
+                data_field = {
+                    "type": "zone",
+                    "center": {
+                        "latitude": center_lat,
+                        "longitude": center_lng
+                    },
+                    "radius": radius
+                }
+            elif trip_type == "place":
+                if location_info:
+                    place_lat = location_info['latitude']
+                    place_lng = location_info['longitude']
+                    place_name = location_info['place_name']
+                    place_id = location_info.get('place_id')
+                else:
+                    # Fallback to defaults
+                    place_lat = 40.7128  # NYC
+                    place_lng = -74.0060
+                    place_name = city or country or 'Unknown Place'
+                    place_id = None
+                
+                data_field = {
+                    "type": "place",
+                    "coordinates": {
+                        "latitude": place_lat,
+                        "longitude": place_lng
+                    },
+                    "place_name": place_name,
+                    "place_id": place_id
+                }
+            elif trip_type == "road":
+                # For road trips, we need origin and destination
+                # This is more complex, might need to extract from activities or use defaults
+                if location_info:
+                    # Use the first location as origin, try to find a different one as destination
+                    origin_lat = location_info['latitude']
+                    origin_lng = location_info['longitude']
+                    origin_name = location_info['place_name']
+                    origin_place_id = location_info.get('place_id')
+                    
+                    # Try to find a different location for destination
+                    dest_lat = origin_lat + 0.1  # Small offset as fallback
+                    dest_lng = origin_lng + 0.1
+                    dest_name = 'End Point'
+                    dest_place_id = None
+                else:
+                    # Fallback to NYC area
+                    origin_lat, origin_lng = 40.7128, -74.0060
+                    dest_lat, dest_lng = 40.7589, -73.9851
+                    origin_name = 'Start Point'
+                    dest_name = 'End Point'
+                    origin_place_id = dest_place_id = None
+                
+                data_field = {
+                    "type": "road",
+                    "origin": {
+                        "coordinates": {
+                            "latitude": origin_lat,
+                            "longitude": origin_lng
+                        },
+                        "place_name": origin_name,
+                        "place_id": origin_place_id
+                    },
+                    "destination": {
+                        "coordinates": {
+                            "latitude": dest_lat,
+                            "longitude": dest_lng
+                        },
+                        "place_name": dest_name,
+                        "place_id": dest_place_id
+                    },
+                    "polylines": current_trip_data.get('polylines', '')
+                }
+        
+        print(f"DEBUG: Using data field: {json.dumps(data_field, indent=2)}")
+        
+        # Prepare request body for recommendations service
+        requestBody = {
+            "trip_id": trip_id,
+            "questionnaire": questionnaire,
+            "start_date": current_trip_data.get('start_date', datetime.now().isoformat()),
+            "end_date": current_trip_data.get('end_date', (datetime.now() + timedelta(days=3)).isoformat()),
+            "budget": current_trip_data.get('budget', 1000),
+            "name": current_trip_data.get('name', 'Updated Trip'),
+            "must_visit_places": current_trip_data.get('must_visit_places', []),
+            "keywords": current_trip_data.get('keywords', []),
+            "country": country,
+            "city": city,
+            "is_group": is_group,
+            "data": data_field,
+            "tripType": trip_type
+        }
+        
+        await websocket.send_json({
+            "type": "progress",
+            "message": "Calling recommendations service...",
+            "progress": 40
+        })
+        
+        # Call recommendations service
+        response = request.post(
+            "http://recommendations:8080/trip", 
+            json=requestBody, 
+            timeout=120
+        )
+        
+        if response.status_code != 200:
+            await websocket.send_json({
+                "type": "error",
+                "message": f"Error from recommendations service: {response.text}",
+                "progress": 40
+            })
+            return
+        
+        await websocket.send_json({
+            "type": "progress",
+            "message": "Processing new itinerary...",
+            "progress": 80
+        })
+        
+        # Process the new itinerary
+        itinerary = response.json()["itinerary"]
+        itinerary["trip_type"] = trip_type
+        itinerary["country"] = country
+        itinerary["city"] = city
+        
+        # Update the trip in cache
+        updated_trip = RoadItinerary(**itinerary).model_dump() if trip_type == "road" else Trip(**itinerary).model_dump()
+        await redis_client.set(trip_id, json.dumps(updated_trip), expire=3600)
+        
+        await websocket.send_json({
+            "type": "progress",
+            "message": "Updating database...",
+            "progress": 90
+        })
+        
+        # Update in database
+        try:
+            if trip_type == "road":
+                client.put_trip_by_doc_id(trip_id, RoadItinerary(**itinerary))
+            else:
+                client.put_trip_by_doc_id(trip_id, Trip(**itinerary))
+        except Exception as db_error:
+            print(f"Database update error: {db_error}")
+            # Continue even if database update fails
+        
+        # Send success response
+        await websocket.send_json({
+            "type": "success",
+            "message": "Trip regenerated successfully!",
+            "progress": 100,
+            "data": {
+                "itinerary": updated_trip,
+                "tripId": trip_id,
+                "preference_id": preference_id
+            }
+        })
+        
+    except WebSocketDisconnect:
+        print(f"WebSocket disconnected for trip {trip_id}")
+    except Exception as e:
+        print(f"Error in trip regeneration: {str(e)}")
+        traceback.print_exc()
+        try:
+            await websocket.send_json({
+                "type": "error",
+                "message": f"Error regenerating trip: {str(e)}",
+                "progress": -1
+            })
+        except:
+            pass 

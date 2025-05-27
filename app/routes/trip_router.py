@@ -492,6 +492,9 @@ async def update_trip_preferences(trip_id: str, preferences_data: dict, rq: Requ
         
         current_trip_data = json.loads(current_trip)
         
+        print(f"Current trip data keys: {list(current_trip_data.keys())}")
+        print(f"Current trip data sample: {json.dumps(current_trip_data, indent=2)[:500]}...")
+        
         # Get the preference_id from the request
         preference_id = preferences_data.get("preference_id")
         answers = preferences_data.get("answers", [])
@@ -503,25 +506,8 @@ async def update_trip_preferences(trip_id: str, preferences_data: dict, rq: Requ
                 status.HTTP_400_BAD_REQUEST,
             )
 
-        # Update preferences in user-management service
-        preferences_payload = {
-            "name": "Updated Trip Preferences",  # You might want to get this from the request
-            "answers": [{"question_id": answer["question_id"], "answer": {"value": answer["value"]}} for answer in answers]
-        }
-        
-        preferences_response = request.put(
-            f"{USER_MANAGEMENT_URL}/preferences/{preference_id}",
-            json=preferences_payload,
-            cookies={"voyage_at": voyage_cookie},
-            timeout=10,
-        )
-        
-        if preferences_response.status_code != 200:
-            return ResponseBody(
-                {"error": f"Failed to update preferences: {preferences_response.text}"},
-                "Failed to update preferences",
-                status.HTTP_500_INTERNAL_SERVER_ERROR,
-            )
+        # NOTE: Preferences are already updated by user-management service
+        # No need to update them again here to avoid circular dependency
 
         # Prepare questionnaire for recommendations service
         questionnaire = [{"question_id": answer["question_id"], "value": answer["value"], "type": "scale"} for answer in answers]
@@ -551,8 +537,73 @@ async def update_trip_preferences(trip_id: str, preferences_data: dict, rq: Requ
             "is_group": is_group,
         }
         
+        # Reconstruct the data field based on trip type and available data
+        data_field = current_trip_data.get('data')
+        if not data_field or (isinstance(data_field, dict) and data_field.get('template_type')):
+            # If we don't have the original data structure, create a default one based on trip type
+            print(f"Reconstructing data field for trip_type: {trip_type}")
+            
+            if trip_type == "zone":
+                # For zone trips, we need center coordinates and radius
+                # Try to extract from the trip data or use defaults
+                center_lat = current_trip_data.get('center_latitude', 40.7128)  # Default to NYC
+                center_lng = current_trip_data.get('center_longitude', -74.0060)
+                radius = current_trip_data.get('radius', 50)  # Default 50km radius
+                
+                data_field = {
+                    "type": "zone",
+                    "center": {
+                        "latitude": center_lat,
+                        "longitude": center_lng
+                    },
+                    "radius": radius
+                }
+            elif trip_type == "place":
+                # For place trips, we need coordinates and place name
+                place_lat = current_trip_data.get('place_latitude', 40.7128)
+                place_lng = current_trip_data.get('place_longitude', -74.0060)
+                place_name = current_trip_data.get('place_name', city or country or 'Unknown Place')
+                
+                data_field = {
+                    "type": "place",
+                    "coordinates": {
+                        "latitude": place_lat,
+                        "longitude": place_lng
+                    },
+                    "place_name": place_name,
+                    "place_id": current_trip_data.get('place_id')
+                }
+            elif trip_type == "road":
+                # For road trips, we need origin, destination, and polylines
+                # This is more complex, might need to extract from activities
+                origin_name = current_trip_data.get('origin_name', 'Start Point')
+                dest_name = current_trip_data.get('destination_name', 'End Point')
+                
+                data_field = {
+                    "type": "road",
+                    "origin": {
+                        "coordinates": {
+                            "latitude": current_trip_data.get('origin_latitude', 40.7128),
+                            "longitude": current_trip_data.get('origin_longitude', -74.0060)
+                        },
+                        "place_name": origin_name,
+                        "place_id": current_trip_data.get('origin_place_id')
+                    },
+                    "destination": {
+                        "coordinates": {
+                            "latitude": current_trip_data.get('destination_latitude', 40.7589),
+                            "longitude": current_trip_data.get('destination_longitude', -73.9851)
+                        },
+                        "place_name": dest_name,
+                        "place_id": current_trip_data.get('destination_place_id')
+                    },
+                    "polylines": current_trip_data.get('polylines', '')
+                }
+        
+        print(f"Using data field: {json.dumps(data_field, indent=2)}")
+        
         # Add data type and trip type
-        requestBody["data"] = current_trip_data.get('data', {"template_type": "moderate"})
+        requestBody["data"] = data_field
         requestBody["tripType"] = trip_type
         
         print(f"Calling recommendations service with data: {json.dumps(requestBody)[:200]}...")
