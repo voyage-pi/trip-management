@@ -161,6 +161,30 @@ async def websocket_trip_creation(websocket: WebSocket):
         itinerary["country"] = country
         itinerary["city"] = city
         
+        # Store original location data for regeneration
+        itinerary["original_place_data"] = forms.data_type.model_dump()
+        
+        # Extract and store coordinates based on trip type
+        if trip_type.value == "zone":
+            itinerary["center_coordinates"] = {
+                "latitude": forms.data_type.center.latitude,
+                "longitude": forms.data_type.center.longitude
+            }
+        elif trip_type.value == "place":
+            itinerary["place_coordinates"] = {
+                "latitude": forms.data_type.coordinates.latitude,
+                "longitude": forms.data_type.coordinates.longitude
+            }
+        elif trip_type.value == "road":
+            itinerary["origin_coordinates"] = {
+                "latitude": forms.data_type.origin.coordinates.latitude,
+                "longitude": forms.data_type.origin.coordinates.longitude
+            }
+            itinerary["destination_coordinates"] = {
+                "latitude": forms.data_type.destination.coordinates.latitude,
+                "longitude": forms.data_type.destination.coordinates.longitude
+            }
+        
         current_trip = dict()
         current_trip["itinerary"] = RoadItinerary(**itinerary).model_dump() if trip_type.value == "road" else Trip(**itinerary).model_dump()
         current_trip["tripId"] = trip_id
@@ -360,7 +384,7 @@ async def websocket_trip_regeneration(websocket: WebSocket, trip_id: str):
         city = current_trip_data.get('city')
         is_group = current_trip_data.get('is_group', False)
         
-        # Function to extract location from trip activities
+        # Function to extract location from trip activities (fallback for older trips)
         def extract_location_from_activities(trip_data):
             """Extract location coordinates from existing trip activities"""
             try:
@@ -387,99 +411,145 @@ async def websocket_trip_regeneration(websocket: WebSocket, trip_id: str):
                 print(f"Error extracting location from activities: {e}")
                 return None
         
-        # Reconstruct the data field based on trip type
-        data_field = current_trip_data.get('data')
-        if not data_field or (isinstance(data_field, dict) and data_field.get('template_type')):
-            print(f"DEBUG: Reconstructing data field for trip_type: {trip_type}")
+        # Use stored location data for regeneration
+        data_field = current_trip_data.get('original_place_data')
+        
+        if data_field:
+            print(f"DEBUG: Using stored original place data: {json.dumps(data_field, indent=2)}")
+        else:
+            print(f"DEBUG: No stored place data found, reconstructing from stored coordinates")
             
-            # Extract location from existing activities
-            location_info = extract_location_from_activities(current_trip_data)
-            print(f"DEBUG: Extracted location info: {location_info}")
-            
+            # Fallback: reconstruct from stored coordinate fields
             if trip_type == "zone":
-                if location_info:
-                    center_lat = location_info['latitude']
-                    center_lng = location_info['longitude']
-                    radius = current_trip_data.get('radius', 50)  # Default 50km radius
+                center_coords = current_trip_data.get('center_coordinates')
+                if center_coords:
+                    data_field = {
+                        "type": "zone",
+                        "center": {
+                            "latitude": center_coords['latitude'],
+                            "longitude": center_coords['longitude']
+                        },
+                        "radius": current_trip_data.get('radius', 50)
+                    }
                 else:
-                    # Fallback to hardcoded defaults
-                    center_lat = 40.7128  # NYC
-                    center_lng = -74.0060
-                    radius = 50
-                
-                data_field = {
-                    "type": "zone",
-                    "center": {
-                        "latitude": center_lat,
-                        "longitude": center_lng
-                    },
-                    "radius": radius
-                }
+                    # Last resort: extract from activities
+                    location_info = extract_location_from_activities(current_trip_data)
+                    if location_info:
+                        data_field = {
+                            "type": "zone",
+                            "center": {
+                                "latitude": location_info['latitude'],
+                                "longitude": location_info['longitude']
+                            },
+                            "radius": 50
+                        }
+                    else:
+                        # Final fallback to NYC
+                        data_field = {
+                            "type": "zone",
+                            "center": {"latitude": 40.7128, "longitude": -74.0060},
+                            "radius": 50
+                        }
+                        
             elif trip_type == "place":
-                if location_info:
-                    place_lat = location_info['latitude']
-                    place_lng = location_info['longitude']
-                    place_name = location_info['place_name']
-                    place_id = location_info.get('place_id')
+                place_coords = current_trip_data.get('place_coordinates')
+                if place_coords:
+                    data_field = {
+                        "type": "place",
+                        "coordinates": {
+                            "latitude": place_coords['latitude'],
+                            "longitude": place_coords['longitude']
+                        },
+                        "place_name": city or country or 'Unknown Place',
+                        "place_id": None
+                    }
                 else:
-                    # Fallback to defaults
-                    place_lat = 40.7128  # NYC
-                    place_lng = -74.0060
-                    place_name = city or country or 'Unknown Place'
-                    place_id = None
-                
-                data_field = {
-                    "type": "place",
-                    "coordinates": {
-                        "latitude": place_lat,
-                        "longitude": place_lng
-                    },
-                    "place_name": place_name,
-                    "place_id": place_id
-                }
+                    # Last resort: extract from activities
+                    location_info = extract_location_from_activities(current_trip_data)
+                    if location_info:
+                        data_field = {
+                            "type": "place",
+                            "coordinates": {
+                                "latitude": location_info['latitude'],
+                                "longitude": location_info['longitude']
+                            },
+                            "place_name": location_info['place_name'],
+                            "place_id": location_info.get('place_id')
+                        }
+                    else:
+                        # Final fallback
+                        data_field = {
+                            "type": "place",
+                            "coordinates": {"latitude": 40.7128, "longitude": -74.0060},
+                            "place_name": city or country or 'Unknown Place',
+                            "place_id": None
+                        }
+                        
             elif trip_type == "road":
-                # For road trips, we need origin and destination
-                # This is more complex, might need to extract from activities or use defaults
-                if location_info:
-                    # Use the first location as origin, try to find a different one as destination
-                    origin_lat = location_info['latitude']
-                    origin_lng = location_info['longitude']
-                    origin_name = location_info['place_name']
-                    origin_place_id = location_info.get('place_id')
-                    
-                    # Try to find a different location for destination
-                    dest_lat = origin_lat + 0.1  # Small offset as fallback
-                    dest_lng = origin_lng + 0.1
-                    dest_name = 'End Point'
-                    dest_place_id = None
-                else:
-                    # Fallback to NYC area
-                    origin_lat, origin_lng = 40.7128, -74.0060
-                    dest_lat, dest_lng = 40.7589, -73.9851
-                    origin_name = 'Start Point'
-                    dest_name = 'End Point'
-                    origin_place_id = dest_place_id = None
+                origin_coords = current_trip_data.get('origin_coordinates')
+                dest_coords = current_trip_data.get('destination_coordinates')
                 
-                data_field = {
-                    "type": "road",
-                    "origin": {
-                        "coordinates": {
-                            "latitude": origin_lat,
-                            "longitude": origin_lng
+                if origin_coords and dest_coords:
+                    data_field = {
+                        "type": "road",
+                        "origin": {
+                            "coordinates": {
+                                "latitude": origin_coords['latitude'],
+                                "longitude": origin_coords['longitude']
+                            },
+                            "place_name": "Origin",
+                            "place_id": None
                         },
-                        "place_name": origin_name,
-                        "place_id": origin_place_id
-                    },
-                    "destination": {
-                        "coordinates": {
-                            "latitude": dest_lat,
-                            "longitude": dest_lng
+                        "destination": {
+                            "coordinates": {
+                                "latitude": dest_coords['latitude'],
+                                "longitude": dest_coords['longitude']
+                            },
+                            "place_name": "Destination",
+                            "place_id": None
                         },
-                        "place_name": dest_name,
-                        "place_id": dest_place_id
-                    },
-                    "polylines": current_trip_data.get('polylines', '')
-                }
+                        "polylines": current_trip_data.get('polylines', '')
+                    }
+                else:
+                    # Last resort: extract from activities
+                    location_info = extract_location_from_activities(current_trip_data)
+                    if location_info:
+                        data_field = {
+                            "type": "road",
+                            "origin": {
+                                "coordinates": {
+                                    "latitude": location_info['latitude'],
+                                    "longitude": location_info['longitude']
+                                },
+                                "place_name": location_info['place_name'],
+                                "place_id": location_info.get('place_id')
+                            },
+                            "destination": {
+                                "coordinates": {
+                                    "latitude": location_info['latitude'] + 0.1,
+                                    "longitude": location_info['longitude'] + 0.1
+                                },
+                                "place_name": "End Point",
+                                "place_id": None
+                            },
+                            "polylines": ''
+                        }
+                    else:
+                        # Final fallback
+                        data_field = {
+                            "type": "road",
+                            "origin": {
+                                "coordinates": {"latitude": 40.7128, "longitude": -74.0060},
+                                "place_name": "Start Point",
+                                "place_id": None
+                            },
+                            "destination": {
+                                "coordinates": {"latitude": 40.7589, "longitude": -73.9851},
+                                "place_name": "End Point", 
+                                "place_id": None
+                            },
+                            "polylines": ''
+                        }
         
         print(f"DEBUG: Using data field: {json.dumps(data_field, indent=2)}")
         

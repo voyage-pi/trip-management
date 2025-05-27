@@ -94,6 +94,31 @@ async def trip_creation(forms: Form,rq:Request):
         itinerary["trip_type"]=trip_type.value
         itinerary["country"]=country
         itinerary["city"]=city
+        
+        # Store original location data for regeneration
+        itinerary["original_place_data"] = forms.data_type.model_dump()
+        
+        # Extract and store coordinates based on trip type
+        if trip_type.value == "zone":
+            itinerary["center_coordinates"] = {
+                "latitude": forms.data_type.center.latitude,
+                "longitude": forms.data_type.center.longitude
+            }
+        elif trip_type.value == "place":
+            itinerary["place_coordinates"] = {
+                "latitude": forms.data_type.coordinates.latitude,
+                "longitude": forms.data_type.coordinates.longitude
+            }
+        elif trip_type.value == "road":
+            itinerary["origin_coordinates"] = {
+                "latitude": forms.data_type.origin.coordinates.latitude,
+                "longitude": forms.data_type.origin.coordinates.longitude
+            }
+            itinerary["destination_coordinates"] = {
+                "latitude": forms.data_type.destination.coordinates.latitude,
+                "longitude": forms.data_type.destination.coordinates.longitude
+            }
+        
         # casting the dictionary to Trip BaseModel object
         current_trip=dict()
         current_trip["itinerary"]=RoadItinerary(**itinerary).model_dump() if trip_type.value=="road" else Trip(**itinerary).model_dump()
