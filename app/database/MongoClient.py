@@ -1,4 +1,4 @@
-from app.schemas.trips_schema import Trip
+from app.schemas.trips_schema import Trip,RoadItinerary
 from pymongo import MongoClient
 from bson import ObjectId
 from typing import List, Union
@@ -69,7 +69,7 @@ class DBClient:
         except PyMongoError as e:
             return f"Error inserting into the database: {e}"
 
-    def get_trip_by_id(self, id: str) -> Union[Trip, str]:
+    def get_trip_by_id(self, id: str) -> Union[Trip,RoadItinerary, str]:
         try:
             result = self.collection.find_one({"_id": ObjectId(id)})
             if result is None:
@@ -78,7 +78,10 @@ class DBClient:
             result["_id"] = str(result["_id"])
             result["id"] = result["_id"]
             result.pop("_id")
-            castedResult = Trip(**result)
+            if result["trip_type"]=="road":
+                castedResult= RoadItinerary(**result)
+            else:
+                castedResult = Trip(**result)
             print("Fetched")
             print("Casted result:", castedResult)
             return castedResult
