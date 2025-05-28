@@ -221,12 +221,11 @@ async def websocket_trip_creation(websocket: WebSocket):
         
         # save preferences if user is logged in
         preference_id = None
-        if voyage_cookie:
+        if not guest:
             # Check if an existing preference_id was provided (for reused preferences)
             if hasattr(forms, 'preference_id') and forms.preference_id:
                 preference_id = forms.preference_id
                 current_trip["preference_id"] = preference_id
-                print(f"Using existing preference ID: {preference_id}")
             else:
                 # Create new preferences
                 preferences={"name":forms.preferences.preferencesName,"answers":[{"answer":{"value":q["value"]},"question_id":q["question_id"]} for q in questionnaire]}
@@ -238,7 +237,6 @@ async def websocket_trip_creation(websocket: WebSocket):
                     cookies={"voyage_at": voyage_cookie} if voyage_cookie else None,
                 )
                 if response.status_code != 200 and response.status_code != 409:
-                    print(f"Error from user-management service: {response.text}")
                     await websocket.send_json({
                         "type": "error",
                         "message": "Couldn't save the preferences of the user for this trip.",
@@ -246,7 +244,6 @@ async def websocket_trip_creation(websocket: WebSocket):
                     return
                 preference_id = response.json()["response"]["id"]
                 current_trip["preference_id"] = preference_id
-                print(f"Created new preference ID: {preference_id}")
             
         if voyage_cookie and not guest:
             try:
