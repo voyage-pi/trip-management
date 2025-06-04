@@ -8,7 +8,7 @@ class RedisClient:
     def __init__(self):
         self.redis = redis.Redis(host=REDIS_HOST, port=REDIS_PORT, decode_responses=True)
 
-    async def set(self, key: str, value: str, expire: int = 3600):
+    async def set(self, key: str, value: str, expire: int = 604800):
         """Set a key-value pair in Redis with an expiration time."""
         await self.redis.set(key, value, ex=expire)
 

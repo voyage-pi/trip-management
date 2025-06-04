@@ -1,6 +1,6 @@
 from datetime import datetime 
 from typing import List, Optional, Dict
-from pydantic import BaseModel
+from pydantic import BaseModel, root_validator
 
 class LatLong(BaseModel):
     latitude: float
@@ -28,6 +28,18 @@ class PlaceInfo(BaseModel):
     allows_dogs: Optional[bool] = None
     good_for_children: Optional[bool] = None
     good_for_groups: Optional[bool] = None
+
+    @root_validator(pre=True)
+    def handle_place_id_field(cls, values):
+        """Handle both 'id' and 'place_id' fields from different sources"""
+        if isinstance(values, dict):
+            # If id is None or missing, try to use place_id
+            if values.get('id') is None and 'place_id' in values:
+                values['id'] = values['place_id']
+        return values
+    
+    class Config:
+        extra = "ignore"  # Ignore extra fields like 'place_id'
 
 class Activity(BaseModel):
     id: int
@@ -61,6 +73,12 @@ class Trip(BaseModel):
     city: str | None = None
     prince_range: Optional[PriceRange] = None
     is_group: bool
+    # Original location data for regeneration
+    original_place_data: Optional[Dict] = None  # Store the original place/zone/road data
+    center_coordinates: Optional[LatLong] = None  # For zone trips
+    place_coordinates: Optional[LatLong] = None   # For place trips
+    origin_coordinates: Optional[LatLong] = None  # For road trips
+    destination_coordinates: Optional[LatLong] = None  # For road trips
 
 class Stop(BaseModel):
     place: PlaceInfo
@@ -76,15 +94,20 @@ class RoadItinerary(BaseModel):
     country: str | None = None
     city: str | None = None
     is_group: bool
+    # Original location data for regeneration
+    original_place_data: Optional[Dict] = None  # Store the original road data
+    origin_coordinates: Optional[LatLong] = None
+    destination_coordinates: Optional[LatLong] = None
 
 class TripResponse(BaseModel):
     itinerary: Trip | RoadItinerary
     tripId: str
-    preferences_id:Optional[int]=None
+    preference_id:Optional[int]=None
 
 class TripSaveRequest(BaseModel):
     id: str
     itinerary: Trip | RoadItinerary
     trip_type: str
     is_group: bool
+    preference_id: Optional[int] = None
 
