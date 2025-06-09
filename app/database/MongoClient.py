@@ -1,4 +1,4 @@
-from app.schemas.trips_schema import Trip
+from app.schemas.trips_schema import Trip, RoadItinerary
 from pymongo import MongoClient
 from bson import ObjectId
 from typing import List, Union
@@ -44,7 +44,7 @@ class DBClient:
             raise ConnectionError(f"Failed to connect to MongoDB: {e}")
 
     def post_trip(
-        self, trips: List[Trip], ids: List[str] = []
+        self, trips: List[Union[Trip, RoadItinerary]], ids: List[str] = []
     ) -> Union[List[str], str]:
         assert (
             len(trips) == len(ids) or not ids
@@ -69,7 +69,7 @@ class DBClient:
         except PyMongoError as e:
             return f"Error inserting into the database: {e}"
 
-    def get_trip_by_id(self, id: str) -> Union[Trip, str]:
+    def get_trip_by_id(self, id: str) -> Union[Trip, RoadItinerary, str, None]:
         try:
             result = self.collection.find_one({"_id": ObjectId(id)})
             if result is None:
@@ -78,15 +78,25 @@ class DBClient:
             result["_id"] = str(result["_id"])
             result["id"] = result["_id"]
             result.pop("_id")
-            castedResult = Trip(**result)
-            print("Fetched")
-            print("Casted result:", castedResult)
-            return castedResult
+            
+            # Determine the correct model type based on trip_type
+            trip_type = result.get("trip_type", "")
+            
+            if trip_type == "road":
+                castedResult = RoadItinerary(**result)
+                print("Fetched road trip")
+                print("Casted result:", castedResult)
+                return castedResult
+            else:
+                castedResult = Trip(**result)
+                print("Fetched regular trip")
+                print("Casted result:", castedResult)
+                return castedResult
         except Exception as e:
             print(f"Error fetching trip by id: {e}")
             return None
 
-    def put_trip_by_doc_id(self, id: str, trip: Trip):
+    def put_trip_by_doc_id(self, id: str, trip: Union[Trip, RoadItinerary]):
         try:
             update_result = self.collection.update_one(
                 {"_id": ObjectId(id)}, {"$set": trip.model_dump()}
@@ -111,11 +121,6 @@ class DBClient:
             return result.modified_count > 0
         except Exception as e:
             return f"Error deleting place from trip: {e}"
-        result = self.collection.update_one(
-            {"_id": ObjectId(trip_id)},
-            {"$pull": {"days.$[].places": {"placeId": place_id}}},
-        )
-        return result.modified_count > 0
 
     def get_all_trips(self):
         result = list(self.collection.find({}))
